@@ -125,6 +125,12 @@
   .abilityBarOuter { background: #1f2a3a; border-radius: 4px; height: 8px; overflow: hidden; }
   .abilityBarInner { background: linear-gradient(90deg,#4d8fdb,#7dd3fc); height: 100%; width: 0%; transition: width 0.1s linear; }
 
+  .setupAbilityRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; flex-wrap: wrap; }
+  .setupAbilityName { font-size: 12px; color: #ccc; }
+  .setupAbilityControls { display: flex; align-items: center; gap: 6px; }
+  .setupAbilityControls button { padding: 3px 8px; font-size: 11px; }
+  .setupStatus, .setupHint { font-size: 11px; color: #888; }
+
   .shopRow {
     display: flex;
     align-items: center;
@@ -261,6 +267,7 @@
     <div class="stat">Depth <b id="waveNum">1</b></div>
     <div class="stat">Best Depth <b id="bestWave">0</b></div>
     <div class="stat">Essence <b id="essenceAmt">0</b></div>
+    <div class="stat">Gold <b id="goldAmtTop">0</b></div>
     <div class="spacer"></div>
     <span class="stat">Speed</span>
     <button class="speedBtn active" data-speed="1">1x</button>
@@ -307,6 +314,10 @@
       <div class="panel">
         <h2>Abilities</h2>
         <div id="abilitiesPanel"><span class="empty">No abilities yet — some major talismans grant one.</span></div>
+      </div>
+      <div class="panel">
+        <h2>Setup Abilities</h2>
+        <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
       </div>
       <div class="panel" id="prepPanel" style="display:none">
         <p class="prepHint">Adjust your build and shop before starting the fight!</p>
@@ -478,11 +489,13 @@
   };
 
   const UPGRADES = [
-    // --- Core stats: flat, additive, capped at level 10 ---
-    { id: 'damage',    name: 'Sharpen Blade',    desc: '+2 Damage',              baseCost: 8,  mult: 1.16, category: 'generic', maxLevel: 10 },
-    { id: 'atkSpeed',  name: 'Swift Strikes',    desc: '+0.1 Attack Speed',      baseCost: 10, mult: 1.18, category: 'generic', maxLevel: 10 },
-    { id: 'maxHP',     name: 'Vitality',         desc: '+15 Max HP',             baseCost: 8,  mult: 1.15, category: 'generic', maxLevel: 10 },
-    { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 12, mult: 1.22, category: 'generic', maxLevel: 10 },
+    // --- Core stats: flat, additive, capped at level 10. Uniform 5g start / 1.4x growth
+    // (5/7/10/14/19/27/38/53/74/103g across the 10 levels) so a few early levels are always
+    // affordable enough to survive on, not just a mid-run investment. ---
+    { id: 'damage',    name: 'Sharpen Blade',    desc: '+2 Damage',              baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    { id: 'atkSpeed',  name: 'Swift Strikes',    desc: '+0.1 Attack Speed',      baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    { id: 'maxHP',     name: 'Vitality',         desc: '+15 Max HP',             baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
 
     // --- Damage Reduction: unlocks once Armor is maxed, the scaling counterpart to Armor ---
     { id: 'ironResolve', name: 'Iron Resolve',   desc: 'Unlock Damage Reduction', baseCost: 20, mult: 1, category: 'archetype', maxLevel: 1, requiresMaxed: 'armor', unlocksStat: 'damageReduction' },
@@ -533,7 +546,11 @@
     { id: 'electricshock', tier: 'major', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack arcs to every enemy adjacent to your target for bonus damage.' },
     { id: 'afterimage', tier: 'major', type: 'ability', icon: '\u{1F465}', name: 'After Image', desc: `Every ${ABILITY_CFG.afterimage.cooldown}s, swap places with a decoy sent to the safest hex 4 tiles out. The decoy has 20% of your max HP and draws enemy attacks in your place.` },
     { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 2 hexes, stunning enemies for 1s/0.5s the closer they are.` },
+    { id: 'icewall',     tier: 'major', type: 'setup', icon: '\u{2744}\u{FE0F}', name: 'Ice Wall', desc: 'Before the fight, place up to 3 connected hexes of impassable ice — enemies (and you) must path around them for the whole fight.' },
+    { id: 'beartrap',    tier: 'minor', type: 'setup', icon: '\u{1FAA4}', name: 'Bear Trap', desc: 'Before the fight, place 1 hex. The first enemy to step on it takes a heavy hit and is rooted for 2s, then it’s spent.' },
   ];
+
+  const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
 
   // ---------------- Data: hero weapons ----------------
   // Independent of talismans — the hero owns all three from the start (see freshHero) and
@@ -543,11 +560,28 @@
   // = melee, spear = reach, crossbow = ranged. `level` doesn't do anything yet (no upgrade path
   // exists) — it's tracked now so a future leveling system has somewhere to live.
   const HERO_WEAPONS = {
-    sword:    { id: 'sword',    name: 'Sword',    icon: '\u{1F5E1}\u{FE0F}', role: 'melee' },
-    spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach' },
-    crossbow: { id: 'crossbow', name: 'Crossbow', icon: '\u{1F3F9}', role: 'ranged' },
+    sword:    { id: 'sword',    name: 'Sword',    icon: '\u{1F5E1}\u{FE0F}', role: 'melee',  desc: 'Balanced melee weapon — no tradeoffs.' },
+    spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach',  desc: '0.75x attack speed, 1.25x damage. Pierces in a line — the near hex takes a full hit, the target takes 0.75x.' },
+    crossbow: { id: 'crossbow', name: 'Crossbow', icon: '\u{1F3F9}', role: 'ranged', desc: '0.5x attack speed, 1.5x damage per shot.' },
   };
   const HERO_WEAPON_IDS = Object.keys(HERO_WEAPONS);
+
+  // Loadout tab hover tooltip — computeStats(id) previews the weapon's REAL numbers (every
+  // active talisman bonus included) as if it were equipped, not just its raw multipliers, so
+  // the tooltip stays accurate as the build changes. `w.effect` is an unused hook today —
+  // future elemental weapons (Ice/Fire) can set it and this line picks it up automatically.
+  function weaponTooltip(id) {
+    const w = HERO_WEAPONS[id];
+    const s = computeStats(id);
+    const lines = [
+      w.desc,
+      `Damage: ${Math.round(s.dmg)}`,
+      `Attack Speed: ${s.atkSpeed.toFixed(2)}/s`,
+      `Range: ${w.role} (${s.atkRange} hex${s.atkRange > 1 ? 'es' : ''})`,
+    ];
+    if (w.effect) lines.push(`Effect: ${w.effect}`);
+    return lines.join('\n');
+  }
 
   // opts fed straight into drawFacingUnit (see its weaponShape dispatch) for whichever weapon
   // is currently equipped — Spear mirrors the Warband Leader's long reach/thrust, Crossbow
@@ -990,6 +1024,15 @@
   let heroTargetId = null;  // sticky target (see pickHeroTarget) — survives across attacks, not re-rolled every hit
   let smokeZones = [];       // active Smoke Screen patches: { hexes: [{row,idx}...], timer }, ticked down
                               // in real sim-time by simulationStep, reset to [] at the start of every fight
+
+  // Setup abilities (Ice Wall / Bear Trap) — placed during PREP, not on a combat cooldown, so
+  // they're reset when a fresh prep phase begins (choosePath/enterBeginnerPrep/enterBossPrep),
+  // NOT in startFight — that would wipe out whatever was just placed right before combat starts.
+  let iceWallHexes = [];     // committed wall hexes (up to 3), persists prep -> combat, no timer
+  let beartrapHex = null;    // committed trap hex, or null if not placed; consumed (nulled) on trigger
+  let pendingWallHexes = []; // in-progress Ice Wall selection, only touched while placingSetupId === 'icewall'
+  let placingSetupId = null; // 'icewall' | 'beartrap' | null — which setup ability the next hex click affects
+
   let nextEnemyId = 1;       // stable spawn-order id, used to tiebreak both targeting and movement priority
   let speed = 1;
   let autoStart = false;
@@ -1068,7 +1111,10 @@
     renderAll();
   }
 
-  function computeStats() {
+  // weaponIdOverride lets the Loadout tab preview any weapon's real stat line (including every
+  // active talisman bonus) without actually equipping it — see weaponTooltip.
+  function computeStats(weaponIdOverride) {
+    const equippedWeapon = weaponIdOverride || hero.equippedWeapon;
     const u = hero.upgrades;
     const has = id => isEquipped(id);
 
@@ -1095,12 +1141,12 @@
     // Driven entirely by whichever weapon is equipped (see HERO_WEAPONS/equipWeapon) — the
     // same ROLE_RANGE lookup enemies use for their own role, so Sword/Spear/Crossbow really
     // just mean melee/reach/ranged for the hero too.
-    let atkRange = ROLE_RANGE[HERO_WEAPONS[hero.equippedWeapon].role];
+    let atkRange = ROLE_RANGE[HERO_WEAPONS[equippedWeapon].role];
     // The Spear trades attack speed for damage and its piercing thrust (see heroAttack) —
     // a real tradeoff, not a strict upgrade over the Sword. The Crossbow trades even more
     // speed for a bigger hit per shot, matching the Archer's own slow-but-hard-hitting feel.
-    if (hero.equippedWeapon === 'spear') { atkSpeed *= 0.75; dmg *= 1.25; }
-    if (hero.equippedWeapon === 'crossbow') { atkSpeed *= 0.5; dmg *= 1.5; }
+    if (equippedWeapon === 'spear') { atkSpeed *= 0.75; dmg *= 1.25; }
+    if (equippedWeapon === 'crossbow') { atkSpeed *= 0.5; dmg *= 1.5; }
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
 
@@ -1509,8 +1555,9 @@
   // Smoke Screen — targets whichever living enemy is currently furthest from the hero and
   // blankets its hex plus the 3 neighbors nearest the hero (the confirmed 4-hex patch shape) for
   // SMOKE_DURATION seconds. Anything caught inside flees instead of approaching (see
-  // resolveEnemyMovement/findStepAwayFromSmoke), moves at SMOKE_SLOW_MULT speed, and can't
-  // attack until it steps out (see simulationStep's enemy-attack loop).
+  // resolveEnemyMovement/findStepAwayFromForcedFlee — reads this zone via terrainAt, not
+  // directly), moves at SMOKE_SLOW_MULT speed, and can't attack until it steps out (see
+  // simulationStep's enemy-attack loop, also via terrainAt).
   function triggerSmokeScreen() {
     if (!queue.length) return;
     let target = queue[0], bestDist = -1;
@@ -1525,6 +1572,26 @@
     smokeZones.push({ hexes, timer: SMOKE_DURATION });
     hexes.forEach(h => { const p = hexPixelPos(h.row, h.idx); spawnSmoke(p.x, p.y); });
     log('A smoke screen blankets the battlefield.', 'crit');
+  }
+
+  // Bear Trap's payoff — a heavy one-time hit plus a root, using the existing stunTimer field
+  // (a rooted enemy skips movement/attack accumulation exactly the same way a stunned one does,
+  // so no new state is needed for it). Triggered from simulationStep the tick an enemy's hex
+  // matches beartrapHex; that same call site nulls beartrapHex right after, consuming it.
+  function triggerBearTrap(enemy) {
+    const s = computeStats();
+    const dmg = Math.max(1, Math.round(s.dmg * 3));
+    enemy.hp -= dmg;
+    enemy.flash = 1;
+    enemy.stunTimer = Math.max(enemy.stunTimer || 0, 2);
+    const p = enemyPos(enemy);
+    spawnSlash(p.x, p.y);
+    spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), '#ff8a3d');
+    applyLifesteal(dmg);
+    applyAffixReactions(enemy, dmg);
+    log('The Bear Trap snaps shut!', 'crit');
+    beartrapHex = null;
+    if (enemy.hp <= 0) killEnemy(enemy);
   }
 
   // Cursed/Vampiric are the two affixes that react to the hero DEALING damage (as opposed to
@@ -1733,7 +1800,18 @@
   // The floor's mandatory capstone fight — skips the choosing screen entirely (there's
   // nothing to pick) but otherwise reuses the normal prep hub, so you still get a chance to
   // shop/re-equip right before it.
+  // Setup-ability state (Ice Wall/Bear Trap) belongs to the fight about to be prepped, not the
+  // one just cleared — reset whenever a fresh prep phase begins, never in startFight (that would
+  // wipe out whatever was just placed moments before the fight actually starts).
+  function resetSetupAbilities() {
+    iceWallHexes = [];
+    beartrapHex = null;
+    pendingWallHexes = [];
+    placingSetupId = null;
+  }
+
   function enterBossPrep() {
+    resetSetupAbilities();
     chosenEncounter = generateBossEncounter(wave, floor);
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
@@ -1753,6 +1831,7 @@
       enterRoomVisit();
       return;
     }
+    resetSetupAbilities();
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
     phase = 'prepping';
@@ -1767,6 +1846,7 @@
   // encounter now, just enough gold to make the first real shop visit worthwhile once the real
   // path-choice loop begins.
   function enterBeginnerPrep() {
+    resetSetupAbilities();
     phase = 'beginnerPrep';
     chosenEncounter = {
       type: 'combat', tierKey: 'beginner', tierLabel: 'Beginner', depth: 0, affixes: [], forceMultiSide: false,
@@ -2095,6 +2175,7 @@
     document.getElementById('floorNum').textContent = floor;
     document.getElementById('waveNum').textContent = wave;
     document.getElementById('goldAmt').textContent = gold;
+    document.getElementById('goldAmtTop').textContent = gold;
     document.getElementById('bestWave').textContent = bestWave;
     document.getElementById('essenceAmt').textContent = legacy.essence;
     const startBtn = document.getElementById('startWaveBtn');
@@ -2130,6 +2211,7 @@
     setStatRow('statRowThorns', 'thorns', Math.round(s.thornsPct * 100) + '%');
     setStatRow('statRowDodge', 'dodge', Math.round(s.dodgeChance * 100) + '%');
     renderAbilitiesPanel();
+    renderSetupAbilitiesPanel();
   }
 
   // Read-only "what's actually active right now" reference, always visible regardless of
@@ -2169,6 +2251,109 @@
       row.innerHTML = `
         <div class="abilityName">${t.icon} ${t.name}</div>
         <div class="abilityBarOuter"><div class="abilityBarInner" style="width:${pct}%"></div></div>`;
+      el.appendChild(row);
+    });
+  }
+
+  // Ice Wall placement — entering/leaving placement mode never touches the already-committed
+  // iceWallHexes, so a mid-placement Cancel always leaves whatever was placed before intact.
+  function beginWallPlacement() {
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
+    pendingWallHexes = [];
+    placingSetupId = 'icewall';
+    renderAll();
+  }
+  function acceptWallPlacement() {
+    if (!pendingWallHexes.length) return;
+    iceWallHexes = pendingWallHexes.slice();
+    pendingWallHexes = [];
+    placingSetupId = null;
+    log(`Ice Wall placed across ${iceWallHexes.length} hex${iceWallHexes.length > 1 ? 'es' : ''}.`, 'wave');
+    renderAll();
+  }
+  function cancelWallPlacement() {
+    pendingWallHexes = [];
+    placingSetupId = null;
+    renderAll();
+  }
+
+  function renderSetupAbilitiesPanel() {
+    const el = document.getElementById('setupAbilitiesPanel');
+    const owned = SETUP_TALISMAN_IDS.filter(id => isEquipped(id));
+    if (!owned.length) {
+      el.innerHTML = '<span class="empty">No setup abilities yet — some talismans grant one.</span>';
+      return;
+    }
+    const canPlace = phase === 'prepping' || phase === 'beginnerPrep';
+    el.innerHTML = '';
+    owned.forEach(id => {
+      const t = TALISMANS.find(x => x.id === id);
+      const row = document.createElement('div');
+      row.className = 'setupAbilityRow';
+
+      const label = document.createElement('div');
+      label.className = 'setupAbilityName';
+      label.title = t.desc;
+      label.textContent = `${t.icon} ${t.name}`;
+      row.appendChild(label);
+
+      const controls = document.createElement('div');
+      controls.className = 'setupAbilityControls';
+
+      if (id === 'icewall') {
+        if (placingSetupId === 'icewall') {
+          const hint = document.createElement('span');
+          hint.className = 'setupHint';
+          hint.textContent = `${pendingWallHexes.length}/3 hexes — click connected open hexes`;
+          controls.appendChild(hint);
+          const acceptBtn = document.createElement('button');
+          acceptBtn.textContent = 'Accept';
+          acceptBtn.disabled = !pendingWallHexes.length;
+          acceptBtn.addEventListener('click', acceptWallPlacement);
+          controls.appendChild(acceptBtn);
+          const cancelBtn = document.createElement('button');
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.addEventListener('click', cancelWallPlacement);
+          controls.appendChild(cancelBtn);
+        } else {
+          const status = document.createElement('span');
+          status.className = 'setupStatus';
+          status.textContent = iceWallHexes.length ? `Placed (${iceWallHexes.length} hex${iceWallHexes.length > 1 ? 'es' : ''})` : 'Not placed';
+          controls.appendChild(status);
+          if (canPlace) {
+            const btn = document.createElement('button');
+            btn.textContent = iceWallHexes.length ? 'Re-place' : 'Place';
+            btn.addEventListener('click', beginWallPlacement);
+            controls.appendChild(btn);
+          }
+        }
+      }
+
+      if (id === 'beartrap') {
+        if (placingSetupId === 'beartrap') {
+          const hint = document.createElement('span');
+          hint.className = 'setupHint';
+          hint.textContent = 'Click an open hex…';
+          controls.appendChild(hint);
+          const cancelBtn = document.createElement('button');
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.addEventListener('click', () => { placingSetupId = null; renderAll(); });
+          controls.appendChild(cancelBtn);
+        } else {
+          const status = document.createElement('span');
+          status.className = 'setupStatus';
+          status.textContent = beartrapHex ? 'Placed' : 'Not placed';
+          controls.appendChild(status);
+          if (canPlace) {
+            const btn = document.createElement('button');
+            btn.textContent = beartrapHex ? 'Re-place' : 'Place';
+            btn.addEventListener('click', () => { placingSetupId = 'beartrap'; renderAll(); });
+            controls.appendChild(btn);
+          }
+        }
+      }
+
+      row.appendChild(controls);
       el.appendChild(row);
     });
   }
@@ -2290,7 +2475,7 @@
       const chip = document.createElement('span');
       const active = hero.equippedWeapon === id;
       chip.className = 'talismanChip slotChip' + (active ? ' equippedWeapon' : '');
-      chip.title = `${w.role} (range ${ROLE_RANGE[w.role]})`;
+      chip.title = weaponTooltip(id);
       chip.textContent = `${w.icon} ${w.name} Lvl ${hero.weapons[id].level}${active ? ' (equipped)' : ''}`;
       if (!active) chip.addEventListener('click', () => equipWeapon(id));
       weaponWrap.appendChild(chip);
@@ -2785,6 +2970,50 @@
     ctx.restore();
   }
 
+  // Ice Wall (permanent for the fight, no timer) and Bear Trap — drawn whenever they have
+  // anything to show, during prep (so placement is visible while you're setting it up) and
+  // combat alike. pendingWallHexes gets a lighter/dashed treatment so an in-progress selection
+  // reads as distinct from the already-committed wall.
+  function drawSetupAbilities() {
+    const drawHexFill = (h, fillStyle, strokeStyle, dashed) => {
+      const p = hexPixelPos(h.row, h.idx);
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 180) * 60 * i;
+        const x = p.x + HEX_RADIUS * Math.cos(angle), y = p.y + HEX_RADIUS * Math.sin(angle);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fillStyle;
+      ctx.fill();
+      if (strokeStyle) {
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = 2;
+        ctx.setLineDash(dashed ? [4, 4] : []);
+        ctx.stroke();
+      }
+    };
+    if (iceWallHexes.length) {
+      ctx.save();
+      iceWallHexes.forEach(h => drawHexFill(h, 'rgba(120,200,255,0.45)', 'rgba(200,240,255,0.9)', false));
+      ctx.restore();
+    }
+    if (pendingWallHexes.length) {
+      ctx.save();
+      pendingWallHexes.forEach(h => drawHexFill(h, 'rgba(120,200,255,0.2)', 'rgba(200,240,255,0.6)', true));
+      ctx.restore();
+    }
+    if (beartrapHex) {
+      const p = hexPixelPos(beartrapHex.row, beartrapHex.idx);
+      ctx.save();
+      ctx.font = '20px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u{1FAA4}', p.x, p.y);
+      ctx.restore();
+    }
+  }
+
   // The margin beside the hex board (plenty of it — the board doesn't fill the canvas width)
   // used for a simple always-visible readout of what's actually affecting this fight, since
   // affixes otherwise only ever showed up on the pre-fight choice card and then disappeared.
@@ -2862,6 +3091,7 @@
     ctx.fillRect(0, 0, W, H);
     drawHexGrid();
     drawSmokeZones();
+    drawSetupAbilities();
     if (phase === 'combat') { drawTargetHighlight(); drawSideHUD(); }
 
     // Hero — shake is a small random jitter (reaction to being hit); lunge is a smooth forward
@@ -3051,7 +3281,9 @@
   // up directly behind another, since neither of its sideways neighbors looked like an
   // improvement on their own even though stepping sideways then forward would have gotten it
   // there. Shared by enemies pathing toward the hero and the hero pathing toward its target.
-  function findStepToward(fromHex, toHex, range, occupied) {
+  // extraGoalCheck (optional) lets a caller narrow "in range" further — e.g. requiring line of
+  // sight too (see hasLineOfSight below) — without every caller needing to know or care about it.
+  function findStepToward(fromHex, toHex, range, occupied, extraGoalCheck) {
     const startKey = hexKey(fromHex.row, fromHex.idx);
     const cameFrom = new Map(); // hexKey -> parent hexKey
     const visited = new Set([startKey]);
@@ -3067,7 +3299,7 @@
           if (visited.has(k) || occupied.has(k)) continue;
           visited.add(k);
           cameFrom.set(k, hexK);
-          if (hexDistance(n, toHex) <= range) { goalKey = k; break; }
+          if (hexDistance(n, toHex) <= range && (!extraGoalCheck || extraGoalCheck(n))) { goalKey = k; break; }
           next.push(n);
         }
         if (goalKey) break;
@@ -3082,10 +3314,102 @@
     return { row, idx };
   }
 
-  // Same BFS-first-step shape as findStepToward, but the goal is "any hex not currently
-  // smoked" instead of "within range of a target" — used to make smoked enemies flee the haze
-  // (see triggerSmokeScreen/isHexSmoked) rather than advance on the hero.
-  function findStepAwayFromSmoke(fromHex, occupied) {
+  // ---------------- Terrain model ----------------
+  // Every terrain effect (Ice Wall, Smoke Screen, and whatever gets added later — Fire Patch,
+  // rubble, difficult ground, elevated hexes...) funnels through this one query instead of
+  // movement/attack code needing to know each terrain type by name. Adding a new terrain effect
+  // means extending terrainAt (and, if it blocks movement or forces a flee, one of the two hex-
+  // list helpers below) — NOT touching resolveEnemyMovement/resolveHeroMovement/simulationStep's
+  // attack loops again, which is exactly the trap Ice Wall and Smoke Screen fell into the first
+  // time around (each one independently patched occupied-set construction, LOS, attack-gating,
+  // and movement in 2-3 separate places, which is also how both of Smoke Screen's real bugs
+  // slipped through — a spot that should have checked "is this terrain-affected" didn't).
+  //
+  // Only the axes something actually uses today are wired up (blocksMovement/blocksLOS from Ice
+  // Wall, speedMult/forcesFlee/blocksAttack from Smoke Screen) — add new axes (dps, hps,
+  // rangeBonus, ...) when a terrain type that needs them actually gets built, not speculatively.
+  function terrainAt(hex) {
+    const t = { blocksMovement: false, blocksLOS: false, speedMult: 1, forcesFlee: false, blocksAttack: false };
+    if (iceWallHexes.some(h => h.row === hex.row && h.idx === hex.idx)) {
+      t.blocksMovement = true;
+      t.blocksLOS = true;
+    }
+    if (isHexSmoked(hex)) {
+      t.speedMult = Math.min(t.speedMult, SMOKE_SLOW_MULT);
+      t.forcesFlee = true;
+      t.blocksAttack = true;
+    }
+    return t;
+  }
+
+  // Every hex that currently blocks movement — used to seed the `occupied` set in both movement
+  // functions and to keep setup-ability placement off of it. A future movement-blocking terrain
+  // type (rubble, chasm) adds its hex list here, not to resolveEnemyMovement/resolveHeroMovement
+  // directly.
+  function terrainBlockingHexes() {
+    return iceWallHexes;
+  }
+
+  // Every hex currently forcing whoever stands there to flee (Smoke Screen today) — used to
+  // route approaching units around it so they don't immediately path back into what they just
+  // fled. A future flee-terrain type adds its hex list here.
+  function terrainForcesFleeHexes() {
+    const hexes = [];
+    smokeZones.forEach(z => hexes.push(...z.hexes));
+    return hexes;
+  }
+
+  // Line of sight — the only thing that blocks it today is Ice Wall (via terrainAt's blocksLOS),
+  // but the check itself is generic. This grid's row/idx scheme has no clean cube-coordinate
+  // form (columns alternate 7/6 tall, not a uniform doubled offset), so instead of grid-native
+  // line-drawing this samples the actual pixel-space line between the two hex CENTERS at each
+  // hex-distance step in between — the same "nearest center wins, board's small enough to not
+  // need exact math" approach hexAt already uses for click detection.
+  //
+  // Ties are resolved in the DEFENDER's favor (Nate's explicit call, mirroring the Spear's
+  // piercing ambiguity rule): a sample point counts as every hex within a small tolerance of the
+  // true nearest center, not just the single closest one, so a shot running exactly along a
+  // shared edge is blocked if EITHER candidate hex blocks LOS.
+  const LOS_TIE_EPSILON = HEX_RADIUS * 0.05;
+
+  function hexesBetween(fromHex, toHex) {
+    const d = hexDistance(fromHex, toHex);
+    if (d <= 1) return []; // adjacent (or the same hex) — nothing can ever stand between them
+    const p1 = hexPixelPos(fromHex.row, fromHex.idx);
+    const p2 = hexPixelPos(toHex.row, toHex.idx);
+    const all = allHexes();
+    const seen = new Set();
+    const between = [];
+    for (let i = 1; i < d; i++) {
+      const t = i / d;
+      const px = p1.x + (p2.x - p1.x) * t;
+      const py = p1.y + (p2.y - p1.y) * t;
+      let minDist = Infinity;
+      all.forEach(h => {
+        const hp = hexPixelPos(h.row, h.idx);
+        minDist = Math.min(minDist, Math.hypot(hp.x - px, hp.y - py));
+      });
+      all.forEach(h => {
+        const hp = hexPixelPos(h.row, h.idx);
+        if (Math.hypot(hp.x - px, hp.y - py) <= minDist + LOS_TIE_EPSILON) {
+          const k = hexKey(h.row, h.idx);
+          if (!seen.has(k)) { seen.add(k); between.push(h); }
+        }
+      });
+    }
+    return between;
+  }
+
+  function hasLineOfSight(fromHex, toHex) {
+    if (!iceWallHexes.length) return true; // fast path — nothing currently blocks LOS at all
+    return !hexesBetween(fromHex, toHex).some(h => terrainAt(h).blocksLOS);
+  }
+
+  // Same BFS-first-step shape as findStepToward, but the goal is "any hex that doesn't force a
+  // flee" instead of "within range of a target" — used to make units on forces-flee terrain
+  // (Smoke Screen today) flee it rather than advance on the hero. Goes through terrainAt, not
+  // isHexSmoked directly, so a future forces-flee terrain type gets this pathing for free.
+  function findStepAwayFromForcedFlee(fromHex, occupied) {
     const startKey = hexKey(fromHex.row, fromHex.idx);
     const cameFrom = new Map();
     const visited = new Set([startKey]);
@@ -3101,14 +3425,14 @@
           if (visited.has(k) || occupied.has(k)) continue;
           visited.add(k);
           cameFrom.set(k, hexK);
-          if (!isHexSmoked(n)) { goalKey = k; break; }
+          if (!terrainAt(n).forcesFlee) { goalKey = k; break; }
           next.push(n);
         }
         if (goalKey) break;
       }
       frontier = next;
     }
-    if (!goalKey) return null; // boxed in — every reachable hex is still smoked or occupied
+    if (!goalKey) return null; // boxed in — every reachable hex still forces a flee or is occupied
 
     let curKey = goalKey, parentKey = cameFrom.get(curKey);
     while (parentKey !== startKey) { curKey = parentKey; parentKey = cameFrom.get(curKey); }
@@ -3128,21 +3452,29 @@
     const occupied = new Set([hexKey(heroHex.row, heroHex.idx)]);
     if (hero.decoy) occupied.add(hexKey(hero.decoy.hex.row, hero.decoy.hex.idx));
     queue.forEach(e => occupied.add(hexKey(e.hex.row, e.hex.idx)));
+    // Any terrain that blocks movement (Ice Wall today) goes into the base occupied set so
+    // every pass below — the flee pass and the approach pass, plus its flee-avoiding variant —
+    // routes around it automatically. A future blocking terrain type extends
+    // terrainBlockingHexes, not this function.
+    terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx)));
 
     const movable = queue.filter(e => !(e.stunTimer > 0));
 
-    // Snapshot smoked status BEFORE either pass moves anything — otherwise an enemy that flees
-    // out of the smoke this tick would immediately read as "not smoked" and get swept up by the
+    // Snapshot terrain BEFORE either pass moves anything — otherwise a unit that flees a
+    // forces-flee hex this tick would immediately read as "clear" and get swept up by the
     // approach pass in the very same tick, canceling its own escape step.
-    const wasSmoked = new Map(movable.map(e => [e, isHexSmoked(e.hex)]));
+    const terrainBefore = new Map(movable.map(e => [e, terrainAt(e.hex)]));
 
-    // Smoked enemies flee the haze instead of approaching — resolved first so both groups draw
-    // from the same occupied set and never claim the same hex. smokeStepReady toggles every
-    // tick so a fleeing enemy only actually steps every other tick (SMOKE_SLOW_MULT = 50% speed).
-    movable.filter(e => wasSmoked.get(e)).forEach(e => {
-      e.smokeStepReady = !e.smokeStepReady;
-      if (!e.smokeStepReady) return;
-      const step = findStepAwayFromSmoke(e.hex, occupied);
+    // Units on forces-flee terrain (Smoke Screen today) flee it instead of approaching —
+    // resolved first so both groups draw from the same occupied set and never claim the same
+    // hex. A speedMult below 1 is implemented as a step-skip toggle (terrainStepReady) rather
+    // than a fractional-step system, since every unit already moves exactly one hex per tick.
+    movable.filter(e => terrainBefore.get(e).forcesFlee).forEach(e => {
+      if (terrainBefore.get(e).speedMult < 1) {
+        e.terrainStepReady = !e.terrainStepReady;
+        if (!e.terrainStepReady) return;
+      }
+      const step = findStepAwayFromForcedFlee(e.hex, occupied);
       if (step) {
         occupied.delete(hexKey(e.hex.row, e.hex.idx));
         e.hex = step;
@@ -3150,26 +3482,31 @@
       }
     });
 
-    // Approaching enemies route around active smoke patches rather than straight through them —
-    // otherwise an enemy that just fled the haze immediately paths right back into it (the
-    // shortest route to the hero often cuts through the same hexes it was just fleeing),
-    // producing an endless flee/re-enter loop instead of ever actually reaching the hero.
-    // Falls back to the un-avoiding occupied set if smoke fully blocks every route (e.g. the
-    // hero itself is inside the patch), so an enemy is never permanently stuck refusing to move.
-    const smokeAvoidingOccupied = new Set(occupied);
-    smokeZones.forEach(z => z.hexes.forEach(h => smokeAvoidingOccupied.add(hexKey(h.row, h.idx))));
+    // Approaching units route around active flee-terrain rather than straight through it —
+    // otherwise a unit that just fled immediately paths right back in (the shortest route often
+    // cuts through the same hexes it was just fleeing), producing an endless flee/re-enter loop
+    // instead of ever actually reaching the hero. Falls back to the un-avoiding occupied set if
+    // flee-terrain fully blocks every route (e.g. the hero itself is inside it), so a unit is
+    // never permanently stuck refusing to move.
+    const fleeAvoidingOccupied = new Set(occupied);
+    terrainForcesFleeHexes().forEach(h => fleeAvoidingOccupied.add(hexKey(h.row, h.idx)));
 
+    // Being within role range is no longer enough on its own — a unit that's in range but LOS-
+    // blocked (Ice Wall) still needs to reposition for a clear shot, exactly like being out of
+    // range. Melee is never affected in practice (adjacent hexes have no hex "between" them for
+    // a wall to occupy — see hexesBetween's d<=1 short-circuit).
     movable
-      .filter(e => !wasSmoked.get(e))
+      .filter(e => !terrainBefore.get(e).forcesFlee)
       .map(e => ({ e, dist: hexDistance(e.hex, target) }))
-      .filter(({ e, dist }) => dist > ROLE_RANGE[e.role])
+      .filter(({ e, dist }) => dist > ROLE_RANGE[e.role] || !hasLineOfSight(e.hex, target))
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
       .forEach(({ e }) => {
-        const step = findStepToward(e.hex, target, ROLE_RANGE[e.role], smokeAvoidingOccupied)
-          || findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied);
+        const losCheck = n => hasLineOfSight(n, target);
+        const step = findStepToward(e.hex, target, ROLE_RANGE[e.role], fleeAvoidingOccupied, losCheck)
+          || findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied, losCheck);
         if (step) {
           occupied.delete(hexKey(e.hex.row, e.hex.idx));
-          smokeAvoidingOccupied.delete(hexKey(e.hex.row, e.hex.idx));
+          fleeAvoidingOccupied.delete(hexKey(e.hex.row, e.hex.idx));
           e.hex = step;
           occupied.add(hexKey(step.row, step.idx));
         }
@@ -3183,9 +3520,10 @@
     const target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
-    if (hexDistance(heroHex, target.hex) <= s.atkRange) return;
+    if (hexDistance(heroHex, target.hex) <= s.atkRange && hasLineOfSight(heroHex, target.hex)) return;
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
-    const step = findStepToward(heroHex, target.hex, s.atkRange, occupied);
+    terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through its own wall either
+    const step = findStepToward(heroHex, target.hex, s.atkRange, occupied, n => hasLineOfSight(n, target.hex));
     if (step) heroHex = step;
   }
 
@@ -3203,6 +3541,38 @@
     return bestDist <= HEX_RADIUS ? best : null;
   }
 
+  // Shared "is this hex free to drop a wall/trap on" check — blocks the hero's own hex, every
+  // enemy hex, and whatever the OTHER setup ability already committed, so Ice Wall and Bear Trap
+  // can never end up sharing a hex.
+  function isHexFreeForSetup(hex) {
+    if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return false;
+    if (heroHex.row === hex.row && heroHex.idx === hex.idx) return false;
+    if (beartrapHex && beartrapHex.row === hex.row && beartrapHex.idx === hex.idx) return false;
+    if (terrainBlockingHexes().some(h => h.row === hex.row && h.idx === hex.idx)) return false;
+    return true;
+  }
+
+  function handleSetupPlacementClick(hex) {
+    if (!isHexFreeForSetup(hex)) return;
+    if (placingSetupId === 'beartrap') {
+      beartrapHex = hex;
+      placingSetupId = null;
+      log('Bear Trap set.', 'wave');
+      renderAll();
+      return;
+    }
+    if (placingSetupId === 'icewall') {
+      if (pendingWallHexes.some(h => h.row === hex.row && h.idx === hex.idx)) return;
+      if (pendingWallHexes.length >= 3) return;
+      // The first hex is free; every hex after that must touch (be hex-adjacent to) at least
+      // one already-selected hex — that's what lets a straight line, an L-bend, or a compact
+      // 3-hex triangle all count as "connected," while a hex off on its own doesn't.
+      if (pendingWallHexes.length > 0 && !pendingWallHexes.some(h => hexDistance(h, hex) === 1)) return;
+      pendingWallHexes.push(hex);
+      renderAll();
+    }
+  }
+
   function onBoardClick(evt) {
     if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
     const canvas = document.getElementById('game');
@@ -3212,6 +3582,7 @@
     const y = (evt.clientY - rect.top) * scaleY;
     const hex = hexAt(x, y);
     if (!hex) return;
+    if (placingSetupId) { handleSetupPlacementClick(hex); return; }
     if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return; // enemies block it
     heroHex = hex;
     renderAll();
@@ -3226,6 +3597,14 @@
     if (!currentHeroTarget()) pickHeroTarget();
     resolveHeroMovement();
     resolveEnemyMovement();
+
+    // Bear Trap — checked right after movement resolves each tick, so it catches whichever
+    // enemy just stepped onto it (or was already standing there). One-shot: beartrapHex is
+    // nulled the instant it fires, so nothing else can trigger the same trap again this fight.
+    if (beartrapHex) {
+      const triggered = queue.find(e => e.hex.row === beartrapHex.row && e.hex.idx === beartrapHex.idx);
+      if (triggered) triggerBearTrap(triggered);
+    }
 
     // Both regen and the poison tick below are gated on queue.length too, not just
     // phase==='combat' — phase stays 'combat' through the post-victory talisman-reward modal
@@ -3256,7 +3635,7 @@
     // Same "only accumulate attack progress while actually in range" rule enemies use — the
     // hero doesn't get a burst of pent-up attacks the instant it closes the distance either.
     const heroTarget = currentHeroTarget();
-    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= s.atkRange) {
+    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= s.atkRange && hasLineOfSight(heroHex, heroTarget.hex)) {
       hero.atkTimer += simDt;
       const heroInterval = 1 / s.atkSpeed;
       while (hero.atkTimer >= heroInterval && phase === 'combat' && queue.length) {
@@ -3289,8 +3668,9 @@
     queue.slice().forEach(enemy => {
       if (phase !== 'combat' || !queue.includes(enemy)) return;
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
-      if (isHexSmoked(enemy.hex)) return; // smoked enemies can't attack until they step out
+      if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
       if (hexDistance(enemy.hex, enemyTarget) > ROLE_RANGE[enemy.role]) return;
+      if (!hasLineOfSight(enemy.hex, enemyTarget)) return; // e.g. Ice Wall blocks the shot, not just adjacency
       enemy.atkTimer += simDt;
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
         enemy.atkTimer -= enemy.atkInterval;
