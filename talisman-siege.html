@@ -63,6 +63,16 @@
     width: 100%;
     box-shadow: 0 0 30px rgba(0,0,0,0.5);
   }
+  /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the
+     sidebar stays visible and clickable while choosing, instead of a full-screen modal blocking
+     it. min-height roughly matches the canvas's own rendered footprint so the log below it
+     doesn't jump around when the two swap. */
+  #pathPanel {
+    min-height: 420px;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+    overflow-y: auto;
+  }
+  #pathPanel .talismanCards { margin-top: 16px; }
   #log {
     margin-top: 8px;
     background: #1f1f26;
@@ -210,6 +220,14 @@
     transition: transform 0.1s, border-color 0.1s;
   }
   .talismanCard:hover { border-color: #7d5dd6; transform: translateY(-3px); }
+  /* Major talismans read as build-defining — a warm gold treatment; minors stay the plain
+     violet scheme every talisman used before this distinction existed. */
+  .talismanChip.tier-major, .talismanCard.tier-major { border-color: #c9a227; background: #3a3320; }
+  .talismanChip.tier-major { color: #f0d68a; }
+  .talismanCard.tier-major .name { color: #f0d68a; }
+  .talismanChip.tier-minor, .talismanCard.tier-minor { border-color: #5a3d78; background: #34243e; }
+  .talismanChip.tier-minor { color: #d9b8f5; }
+  .talismanCard.tier-minor .name { color: #d9b8f5; }
   .talismanCard.duplicate { border-style: dashed; border-color: #6b6b45; opacity: 0.85; }
   .talismanCard.duplicate:hover { border-color: #d8b84a; }
   .talismanCard.duplicate .name { color: #d8b84a; }
@@ -259,6 +277,11 @@
   <div id="main">
     <div id="battleArea">
       <canvas id="game" width="640" height="420"></canvas>
+      <div id="pathPanel" class="panel" style="display:none">
+        <h2>Choose Your Next Encounter</h2>
+        <p class="sub" id="pathModalSub">Pick a fight based on what you can handle — and what you want as a reward.</p>
+        <div id="pathCards" class="talismanCards"></div>
+      </div>
       <div id="log"></div>
     </div>
     <div id="sidebar">
@@ -318,13 +341,6 @@
   </div>
 </div>
 
-<div id="pathModal" class="modal hidden">
-  <div class="modalBox">
-    <h2>Choose Your Next Encounter</h2>
-    <p class="sub" id="pathModalSub">Pick a fight based on what you can handle — and what you want as a reward.</p>
-    <div id="pathCards" class="talismanCards"></div>
-  </div>
-</div>
 
 <div id="roomModal" class="modal hidden">
   <div class="modalBox">
@@ -481,8 +497,14 @@
   const ABILITY_CFG = {
     cleave: { cooldown: 4, dmgMult: 1.0 },
     afterimage: { cooldown: 10 },
-    shockwave: { cooldown: 5 },
+    shockwave: { cooldown: 6.5 },
+    smokescreen: { cooldown: 8 },
   };
+
+  // How long a smoke patch lingers on its hexes once thrown, and how much it slows enemies
+  // caught inside it — both independent of the ability's own recast cooldown.
+  const SMOKE_DURATION = 3;
+  const SMOKE_SLOW_MULT = 0.5;
 
   // ---------------- Data: talismans ----------------
   // Minor talismans are numeric/utility tweaks, offered after wave 3 of every arc.
@@ -492,7 +514,7 @@
     { id: 'bloodthirst', tier: 'minor', icon: '\u{1F489}', name: 'Bloodthirst',   desc: 'Heal for 10% of damage dealt.', unlocksStat: 'lifesteal' },
     { id: 'momentum',    tier: 'minor', icon: '\u{1F3C3}', name: 'Momentum',      desc: 'Attack speed +2% per wave cleared, stacking up to +40%.' },
     { id: 'bountyhunter', tier: 'minor', icon: '\u{1FA99}', name: 'Bounty Hunter', desc: '+2 gold per kill.' },
-    { id: 'thickhide',   tier: 'minor', icon: '\u{1F6E1}', name: 'Thick Hide',    desc: '+25% max HP, -10% damage dealt.' },
+    { id: 'thickhide',   tier: 'minor', icon: '\u{1F6E1}', name: 'Thick Hide',    desc: '+40% max HP, -15% damage dealt.' },
     { id: 'glasscannon', tier: 'minor', icon: '\u{1F4A5}', name: 'Glass Cannon',  desc: '+40% damage, -25% max HP.' },
     { id: 'regen',       tier: 'minor', icon: '\u{2764}',  name: 'Regeneration',  desc: 'Regen 2.5% of max HP per second.', unlocksStat: 'regen' },
     { id: 'thorns',      tier: 'minor', icon: '\u{1F332}', name: 'Thorns',        desc: 'Reflect 25% of damage taken back at the attacker.', unlocksStat: 'thorns' },
@@ -501,6 +523,8 @@
     { id: 'killerinstinct', tier: 'minor', icon: '\u{1F3AF}', name: 'Killer Instinct', desc: '20% Crit Chance. Crits always deal double damage.', unlocksStat: 'critChance' },
     { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+20% Damage.' },
     { id: 'ironvitality', tier: 'minor', icon: '\u{1F49A}', name: 'Iron Vitality', desc: '+25% Max HP.' },
+    { id: 'quickening',  tier: 'minor', icon: '\u{23F1}\u{FE0F}', name: 'Quickening', desc: '-20% to all ability cooldowns.' },
+    { id: 'smokescreen', tier: 'minor', type: 'ability', icon: '\u{1F32B}\u{FE0F}', name: 'Smoke Screen', desc: `Every ${ABILITY_CFG.smokescreen.cooldown}s, blind the furthest enemy's patch of 4 hexes for ${SMOKE_DURATION}s — enemies inside flee, move at ${Math.round(SMOKE_SLOW_MULT * 100)}% speed, and can't attack until they escape it.` },
     { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP.' },
     { id: 'overcharge',  tier: 'major', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.' },
     { id: 'executioner', tier: 'major', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.' },
@@ -508,7 +532,7 @@
     { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage.` },
     { id: 'electricshock', tier: 'major', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack arcs to every enemy adjacent to your target for bonus damage.' },
     { id: 'afterimage', tier: 'major', type: 'ability', icon: '\u{1F465}', name: 'After Image', desc: `Every ${ABILITY_CFG.afterimage.cooldown}s, swap places with a decoy sent to the safest hex 4 tiles out. The decoy has 20% of your max HP and draws enemy attacks in your place.` },
-    { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 3 hexes, stunning enemies for 1.5s/1s/0.5s the closer they are.` },
+    { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 2 hexes, stunning enemies for 1s/0.5s the closer they are.` },
   ];
 
   // ---------------- Data: hero weapons ----------------
@@ -531,7 +555,7 @@
   // has rather than inventing a fourth, unrelated visual language.
   const HERO_WEAPON_VISUALS = {
     sword:    { weaponShape: 'cross', weaponBaseReach: 0.6, weaponLunge: 0.5, weaponBlade: 0.55, weaponTail: 0.15, weaponGuard: 0.18 },
-    spear:    { weaponShape: 'cross', tipShape: 'triangle', tipWidth: 0.09, weaponBaseReach: 0.75, weaponWindup: 0.3, weaponLunge: 0.65, weaponBlade: 0.55, weaponTail: 0.06, weaponGuard: 0.06 },
+    spear:    { weaponShape: 'cross', tipShape: 'triangle', tipWidth: 0.09, weaponBaseReach: 0.75, weaponWindup: 0.3, weaponLunge: 0.65, weaponBlade: 1.65, weaponTail: 0.06, weaponGuard: 0.06 },
     crossbow: { weaponShape: 'crossbow', weaponBaseReach: 0.4, weaponWindup: 0.32, weaponWindupFrac: 0.75, weaponLunge: 0.1 },
   };
 
@@ -637,8 +661,10 @@
     },
     leader: {
       // Spear — long reach and a long, deliberate thrust to match its actual 2-hex reach range.
+      // The blade is ~3x the length every other cross-shaped weapon uses, so it visibly reads
+      // as reaching a full 2 hexes out rather than just a slightly-longer sword.
       weaponShape: 'cross', tipShape: 'triangle', tipWidth: 0.09,
-      weaponBaseReach: 0.75, weaponWindup: 0.3, weaponLunge: 0.65, weaponBlade: 0.55, weaponTail: 0.06, weaponGuard: 0.06,
+      weaponBaseReach: 0.75, weaponWindup: 0.3, weaponLunge: 0.65, weaponBlade: 1.65, weaponTail: 0.06, weaponGuard: 0.06,
     },
     knight: {
       weaponShape: 'cross',
@@ -962,6 +988,8 @@
                                       // mid-fight (not just this per-encounter reset) MUST also null
                                       // heroTargetId below so targeting re-picks from the new position.
   let heroTargetId = null;  // sticky target (see pickHeroTarget) — survives across attacks, not re-rolled every hit
+  let smokeZones = [];       // active Smoke Screen patches: { hexes: [{row,idx}...], timer }, ticked down
+                              // in real sim-time by simulationStep, reset to [] at the start of every fight
   let nextEnemyId = 1;       // stable spawn-order id, used to tiebreak both targeting and movement priority
   let speed = 1;
   let autoStart = false;
@@ -1014,7 +1042,7 @@
   }
 
   function equipTalisman(id) {
-    if (phase !== 'prepping') return;
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
     const t = TALISMANS.find(x => x.id === id);
     if (!t || isEquipped(id)) return;
     if (hero.equipped[t.tier].length >= slotCount(t.tier)) return;
@@ -1023,7 +1051,7 @@
   }
 
   function unequipTalisman(id) {
-    if (phase !== 'prepping') return;
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
     const t = TALISMANS.find(x => x.id === id);
     if (!t) return;
     hero.equipped[t.tier] = hero.equipped[t.tier].filter(x => x !== id);
@@ -1034,7 +1062,7 @@
   // starts. All three weapons are owned from the start (see freshHero), so this is purely a
   // selection, never a purchase.
   function equipWeapon(id) {
-    if (phase !== 'prepping') return;
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
     if (!HERO_WEAPONS[id] || hero.equippedWeapon === id) return;
     hero.equippedWeapon = id;
     renderAll();
@@ -1060,6 +1088,7 @@
     let goldMult = 1;
     let shopCostMult = 1;
     let bonusGoldPerKill = 0;
+    let cooldownReductionPct = 0;
 
     // Crit Damage is now a fixed rule, not a stat — every crit simply deals double.
     const critDamage = 2.0;
@@ -1067,13 +1096,19 @@
     // same ROLE_RANGE lookup enemies use for their own role, so Sword/Spear/Crossbow really
     // just mean melee/reach/ranged for the hero too.
     let atkRange = ROLE_RANGE[HERO_WEAPONS[hero.equippedWeapon].role];
+    // The Spear trades attack speed for damage and its piercing thrust (see heroAttack) —
+    // a real tradeoff, not a strict upgrade over the Sword. The Crossbow trades even more
+    // speed for a bigger hit per shot, matching the Archer's own slow-but-hard-hitting feel.
+    if (hero.equippedWeapon === 'spear') { atkSpeed *= 0.75; dmg *= 1.25; }
+    if (hero.equippedWeapon === 'crossbow') { atkSpeed *= 0.5; dmg *= 1.5; }
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
 
-    if (has('thickhide')) { maxHP *= 1.25; dmg *= 0.90; }
+    if (has('thickhide')) { maxHP *= 1.40; dmg *= 0.85; }
     if (has('glasscannon')) { dmg *= 1.40; maxHP *= 0.75; }
     if (has('goldentouch')) goldMult *= 1.3;
     if (has('bountyhunter')) bonusGoldPerKill += 2;
+    if (has('quickening')) cooldownReductionPct += 0.20;
     if (has('regen')) regen += maxHP * 0.025;
     if (has('luckycharm')) dodgeChance += 0.12;
     if (has('thorns')) thornsPct += 0.25;
@@ -1100,7 +1135,7 @@
       dodgeChance = Math.min(1, dodgeChance * 1.1);
     }
 
-    return { dmg, atkSpeed, maxHP: Math.round(maxHP), armor, damageReductionPct, critChance, critDamage, regen, bonusGoldPerKill, goldMult, shopCostMult, dodgeChance, thornsPct, lifestealPct, atkRange };
+    return { dmg, atkSpeed, maxHP: Math.round(maxHP), armor, damageReductionPct, critChance, critDamage, regen, bonusGoldPerKill, cooldownReductionPct, goldMult, shopCostMult, dodgeChance, thornsPct, lifestealPct, atkRange };
   }
 
   // A stat is unlocked the instant you own something tagged to unlock it — no separate
@@ -1205,8 +1240,11 @@
     }
     effects.push({ type: 'splash', x, y, life: 1, parts });
   }
-  function spawnCleaveSlice(x, yTop, yBottom) {
-    effects.push({ type: 'cleaveSlice', x, yTop, yBottom, life: 1 });
+  // points: the pixel centers of the hexes actually hit, in start -> control -> end order —
+  // always the hex geometry (flank/target/flank), never derived from where enemies happen to
+  // be standing, so the arc reads the same whether all 3 hexes have enemies in them or just one.
+  function spawnCleaveSlice(points) {
+    effects.push({ type: 'cleaveSlice', points, life: 1 });
   }
   // The Archer's bolt — a short streak that travels from where it was fired to where its
   // target was at that moment (not tracked live, same simplification every other hit-feedback
@@ -1307,10 +1345,40 @@
       return;
     }
 
+    // Spear piercing — only when the target is exactly 2 hexes out (only reachable at all via
+    // the Spear's reach) AND there's a single unambiguous hex between hero and it. A hex grid
+    // fans out, so an off-axis distance-2 target has two hexes equally "between" it and the
+    // hero — piercing skips those (see the design discussion) and only fires on the clean
+    // straight-line/diagonal positions where exactly one common hex exists. Whatever's standing
+    // there takes the full hit; the target itself takes 0.75x, as if some of the thrust was
+    // already spent — unless nothing was in the way, in which case the target just takes the
+    // normal full hit (targetDmgMult stays 1).
+    let targetDmgMult = 1;
+    if (hero.equippedWeapon === 'spear' && hexDistance(heroHex, target.hex) === 2) {
+      const between = neighborsOf(heroHex.row, heroHex.idx).filter(h => hexDistance(h, target.hex) === 1);
+      if (between.length === 1) {
+        const firstHex = between[0];
+        const firstEnemy = queue.find(e => e !== target && hexKey(e.hex.row, e.hex.idx) === hexKey(firstHex.row, firstHex.idx));
+        if (firstEnemy) {
+          const pierceDmg = Math.max(1, Math.round(s.dmg));
+          firstEnemy.hp -= pierceDmg;
+          firstEnemy.flash = 1;
+          const fp = enemyPos(firstEnemy);
+          spawnSlash(fp.x, fp.y);
+          spawnDamageNumber(fp.x, fp.y - fp.r - 10, String(pierceDmg), '#fff');
+          applyLifesteal(pierceDmg);
+          applyAffixReactions(firstEnemy, pierceDmg);
+          if (firstEnemy.hp <= 0) killEnemy(firstEnemy);
+          targetDmgMult = 0.75;
+        }
+      }
+    }
+
     let dmg = s.dmg;
     const isCrit = Math.random() < s.critChance;
     if (isCrit) dmg *= s.critDamage;
     if (isEquipped('overcharge') && hero.attackCount % 5 === 0) dmg *= 2.5;
+    dmg *= targetDmgMult;
     dmg = Math.max(1, Math.round(dmg));
 
     target.hp -= dmg;
@@ -1360,16 +1428,17 @@
   function triggerCleave() {
     const target = currentHeroTarget();
     if (!target) return;
-    const hitKeys = new Set(cleaveHexes(target).map(h => hexKey(h.row, h.idx)));
+    const hexes = cleaveHexes(target); // [target, ...flanking] — see cleaveHexes
+    const hitKeys = new Set(hexes.map(h => hexKey(h.row, h.idx)));
     const targets = queue.filter(e => hitKeys.has(hexKey(e.hex.row, e.hex.idx)));
     if (!targets.length) return;
     const s = computeStats();
     const dmg = Math.max(1, Math.round(s.dmg * ABILITY_CFG.cleave.dmgMult));
     log(`Cleave strikes ${targets.length} enem${targets.length > 1 ? 'ies' : 'y'} for ${dmg} each!`, 'crit');
     heroLunge = 1;
-    const positions = targets.map(e => enemyPos(e));
-    const ys = positions.map(p => p.y);
-    spawnCleaveSlice(positions[0].x, Math.min(...ys) - 24, Math.max(...ys) + 24);
+    const flanking = hexes.slice(1);
+    const arcHexes = flanking.length >= 2 ? [flanking[0], target.hex, flanking[1]] : [...flanking, target.hex];
+    spawnCleaveSlice(arcHexes.map(h => hexPixelPos(h.row, h.idx)));
     targets.forEach(enemy => {
       enemy.hp -= dmg;
       enemy.flash = 1;
@@ -1425,12 +1494,37 @@
     let hitAny = false;
     queue.forEach(enemy => {
       const d = hexDistance(enemy.hex, heroHex);
-      if (d > 3) return;
-      const stunDur = d === 1 ? 1.5 : d === 2 ? 1.0 : 0.5;
+      if (d > 2) return;
+      const stunDur = d === 1 ? 1.0 : 0.5;
       enemy.stunTimer = Math.max(enemy.stunTimer || 0, stunDur);
       hitAny = true;
     });
     if (hitAny) log('Shockwave ripples out, stunning nearby enemies!', 'crit');
+  }
+
+  function isHexSmoked(hex) {
+    return smokeZones.some(z => z.hexes.some(h => h.row === hex.row && h.idx === hex.idx));
+  }
+
+  // Smoke Screen — targets whichever living enemy is currently furthest from the hero and
+  // blankets its hex plus the 3 neighbors nearest the hero (the confirmed 4-hex patch shape) for
+  // SMOKE_DURATION seconds. Anything caught inside flees instead of approaching (see
+  // resolveEnemyMovement/findStepAwayFromSmoke), moves at SMOKE_SLOW_MULT speed, and can't
+  // attack until it steps out (see simulationStep's enemy-attack loop).
+  function triggerSmokeScreen() {
+    if (!queue.length) return;
+    let target = queue[0], bestDist = -1;
+    queue.forEach(e => {
+      const d = hexDistance(e.hex, heroHex);
+      if (d > bestDist) { bestDist = d; target = e; }
+    });
+    const nearest3 = neighborsOf(target.hex.row, target.hex.idx)
+      .sort((a, b) => hexDistance(a, heroHex) - hexDistance(b, heroHex))
+      .slice(0, 3);
+    const hexes = [target.hex, ...nearest3];
+    smokeZones.push({ hexes, timer: SMOKE_DURATION });
+    hexes.forEach(h => { const p = hexPixelPos(h.row, h.idx); spawnSmoke(p.x, p.y); });
+    log('A smoke screen blankets the battlefield.', 'crit');
   }
 
   // Cursed/Vampiric are the two affixes that react to the hero DEALING damage (as opposed to
@@ -1669,8 +1763,9 @@
   }
 
   // The fixed, deterministic encounter every run opens with right after the starter talisman
-  // pick — same every time, no loadout/shop screen, just enough gold to make the first real
-  // shop visit worthwhile once the real path-choice loop begins.
+  // pick — same every time. Prep hub (Loadout/Shop) shows during this phase same as any other
+  // encounter now, just enough gold to make the first real shop visit worthwhile once the real
+  // path-choice loop begins.
   function enterBeginnerPrep() {
     phase = 'beginnerPrep';
     chosenEncounter = {
@@ -1681,6 +1776,8 @@
     };
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
+    prepTab = 'loadout';
+    refreshShopForPrep();
     renderAll();
     maybeAutoStart();
   }
@@ -1837,7 +1934,7 @@
       const t = pick.t;
       const reward = duplicateEssenceReward(tier);
       const card = document.createElement('div');
-      card.className = 'talismanCard' + (pick.duplicate ? ' duplicate' : '');
+      card.className = 'talismanCard tier-' + t.tier + (pick.duplicate ? ' duplicate' : '');
       card.innerHTML = pick.duplicate
         ? `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">Already owned — convert to <b>+${reward} essence</b> instead.</div>`
         : `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>`;
@@ -1888,6 +1985,9 @@
     hero.poisonStacks = 0;
     hero.plaguedDmgRef = 0;
     hero.decoy = null;
+    hero.cooldowns = {}; // abilities start fresh each fight, never carrying a head start (or a
+                          // deficit) over from the last one
+    smokeZones = [];
     heroTargetId = null;
     phase = 'combat';
     log(`Encounter begins: ${chosenEncounter.desc}`, 'wave');
@@ -1977,7 +2077,7 @@
   }
 
   function rerollShop() {
-    if (phase !== 'prepping' || gold < rerollCost) return;
+    if ((phase !== 'prepping' && phase !== 'beginnerPrep') || gold < rerollCost) return;
     gold -= rerollCost;
     rerollCost *= 2;
     shopOffer = rollShopOffer();
@@ -2045,7 +2145,7 @@
     ids.forEach(id => {
       const t = TALISMANS.find(x => x.id === id);
       const chip = document.createElement('span');
-      chip.className = 'talismanChip';
+      chip.className = 'talismanChip tier-' + t.tier;
       chip.title = t.desc;
       chip.textContent = `${t.icon} ${t.name}`;
       el.appendChild(chip);
@@ -2056,7 +2156,7 @@
     const el = document.getElementById('abilitiesPanel');
     const owned = Object.keys(ABILITY_CFG).filter(id => isEquipped(id));
     if (!owned.length) {
-      el.innerHTML = '<span class="empty">No abilities yet — some major talismans grant one.</span>';
+      el.innerHTML = '<span class="empty">No abilities yet — some talismans grant one.</span>';
       return;
     }
     el.innerHTML = '';
@@ -2074,12 +2174,15 @@
   }
 
   function renderShopPanel() {
+    // The beginner encounter's prep phase gets the same functional shop as every other
+    // encounter now (see task 79/renderPrepPanel) — not just the same look.
+    const canShop = phase === 'prepping' || phase === 'beginnerPrep';
     const freezeBtn = document.getElementById('shopFreezeBtn');
     freezeBtn.textContent = shopFrozenNext ? '🔒 Frozen for next prep' : 'Freeze Shop';
     freezeBtn.classList.toggle('active', shopFrozenNext);
     const rerollBtn = document.getElementById('shopRerollBtn');
     rerollBtn.textContent = `Reroll (${rerollCost}g)`;
-    rerollBtn.disabled = phase !== 'prepping' || gold < rerollCost;
+    rerollBtn.disabled = !canShop || gold < rerollCost;
 
     const el = document.getElementById('shopPanel');
     el.innerHTML = '';
@@ -2100,7 +2203,7 @@
         buyAllBtn.className = 'buyAllBtn';
         const totalCost = groupPurchaseCost(group.ids);
         buyAllBtn.textContent = totalCost > 0 ? `Buy All (${totalCost}g)` : 'Buy All';
-        buyAllBtn.disabled = phase !== 'prepping' || totalCost === 0 || gold < totalCost;
+        buyAllBtn.disabled = !canShop || totalCost === 0 || gold < totalCost;
         buyAllBtn.addEventListener('click', () => group.ids.forEach(id => buyUpgrade(id)));
         header.appendChild(buyAllBtn);
       }
@@ -2123,7 +2226,7 @@
         const buyWrap = row.querySelector('.shopBuy');
         const btn = document.createElement('button');
         btn.textContent = bought ? 'Bought' : (maxed ? 'Owned' : 'Buy');
-        btn.disabled = phase !== 'prepping' || gold < cost || bought || maxed;
+        btn.disabled = !canShop || gold < cost || bought || maxed;
         btn.addEventListener('click', () => buyUpgrade(u.id));
         buyWrap.appendChild(btn);
         el.appendChild(row);
@@ -2206,7 +2309,7 @@
         const chip = document.createElement('span');
         if (id) {
           const t = TALISMANS.find(x => x.id === id);
-          chip.className = 'talismanChip slotChip';
+          chip.className = 'talismanChip slotChip tier-' + t.tier;
           chip.title = t.desc;
           chip.textContent = `${t.icon} ${t.name}`;
           chip.addEventListener('click', () => unequipTalisman(id));
@@ -2232,7 +2335,7 @@
       bagIds.forEach(id => {
         const t = TALISMANS.find(x => x.id === id);
         const chip = document.createElement('span');
-        chip.className = 'talismanChip slotChip';
+        chip.className = 'talismanChip slotChip tier-' + t.tier;
         chip.title = t.desc;
         chip.textContent = `${t.icon} ${t.name}`;
         chip.addEventListener('click', () => equipTalisman(id));
@@ -2247,11 +2350,13 @@
     renderPrepPanel();
   }
 
-  // The combined prep hub (Loadout + Shop tabs) only shows during 'prepping' — the beginner
-  // encounter and the choosing/combat/gameover phases all hide it entirely.
+  // The combined prep hub (Loadout + Shop tabs) shows during both 'prepping' and
+  // 'beginnerPrep' — the very first fight gets the same weapon/loadout/shop access as every
+  // other encounter now, rather than being specially skipped. Only the choosing/combat/gameover
+  // phases hide it entirely.
   function renderPrepPanel() {
     const panel = document.getElementById('prepPanel');
-    if (phase !== 'prepping') { panel.style.display = 'none'; return; }
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') { panel.style.display = 'none'; return; }
     panel.style.display = '';
     document.querySelectorAll('.tabBtn').forEach(b => b.classList.toggle('active', b.dataset.tab === prepTab));
     document.getElementById('loadoutTabContent').style.display = prepTab === 'loadout' ? '' : 'none';
@@ -2260,10 +2365,15 @@
     renderShopPanel();
   }
 
+  // Lives inline in battleArea (swapping with the canvas) rather than a full-screen modal, so
+  // the sidebar — Hero stats, Equipped, Legacy — stays visible and clickable while choosing:
+  // exactly the point of this being here instead of a popup blocking everything.
   function renderPathModal() {
-    const modal = document.getElementById('pathModal');
-    if (phase !== 'choosing') { modal.classList.add('hidden'); return; }
-    modal.classList.remove('hidden');
+    const panel = document.getElementById('pathPanel');
+    const canvas = document.getElementById('game');
+    if (phase !== 'choosing') { panel.style.display = 'none'; canvas.style.display = ''; return; }
+    panel.style.display = '';
+    canvas.style.display = 'none';
     document.getElementById('pathModalSub').textContent =
       `Floor ${floor} — Encounter ${floorPosition} of ${FLOOR_LENGTH}. Pick a fight based on what you can handle — and what you want as a reward.`;
     const el = document.getElementById('pathCards');
@@ -2314,7 +2424,7 @@
       const isPlaceholder = t === PLACEHOLDER_TALISMAN;
       const affordable = !isPlaceholder && gold >= offer.price;
       const card = document.createElement('div');
-      card.className = 'talismanCard' + (isPlaceholder || offer.bought ? ' duplicate' : '') + (!isPlaceholder && !offer.bought && !affordable ? ' unaffordable' : '');
+      card.className = 'talismanCard tier-' + t.tier + (isPlaceholder || offer.bought ? ' duplicate' : '') + (!isPlaceholder && !offer.bought && !affordable ? ' unaffordable' : '');
       const priceLine = isPlaceholder ? '' : `<div class="rewardLine">${offer.bought ? 'Bought' : offer.price + 'g'}</div>`;
       card.innerHTML = `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>${priceLine}`;
       if (!isPlaceholder && !offer.bought) {
@@ -2368,24 +2478,23 @@
     wrap.className = 'talismanCards';
     if (!hero.talismanBag.length) {
       wrap.innerHTML = '<span class="empty">You have nothing to offer.</span>';
-      body.appendChild(wrap);
-      const btn = document.createElement('button');
-      btn.className = 'primary';
-      btn.textContent = 'Leave';
-      btn.addEventListener('click', leaveRoom);
-      body.appendChild(btn);
-      return;
+    } else {
+      hero.talismanBag.forEach(id => {
+        const t = TALISMANS.find(x => x.id === id);
+        const card = document.createElement('div');
+        card.className = 'talismanCard tier-' + t.tier;
+        card.innerHTML = `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>`;
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => sacrificeTalisman(id));
+        wrap.appendChild(card);
+      });
     }
-    hero.talismanBag.forEach(id => {
-      const t = TALISMANS.find(x => x.id === id);
-      const card = document.createElement('div');
-      card.className = 'talismanCard';
-      card.innerHTML = `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>`;
-      card.style.cursor = 'pointer';
-      card.addEventListener('click', () => sacrificeTalisman(id));
-      wrap.appendChild(card);
-    });
     body.appendChild(wrap);
+    // Sacrificing is never mandatory — walking away costs nothing but the visit itself.
+    const skipBtn = document.createElement('button');
+    skipBtn.textContent = "Leave the altar without making a sacrifice. Hopefully you won't regret this…";
+    skipBtn.addEventListener('click', leaveRoom);
+    body.appendChild(skipBtn);
   }
 
   // A small always-visible callout showing what you're about to fight (or are currently
@@ -2653,6 +2762,29 @@
     ctx.restore();
   }
 
+  // Persistent haze for active Smoke Screen zones — redrawn every frame for as long as the
+  // zone survives in smokeZones (its real lifetime is tracked there, in sim time; this is just
+  // the visual). Drawn under the units so a smoked enemy still reads clearly on top of it.
+  function drawSmokeZones() {
+    if (!smokeZones.length) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(190,190,200,0.35)';
+    smokeZones.forEach(z => {
+      z.hexes.forEach(h => {
+        const p = hexPixelPos(h.row, h.idx);
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 180) * 60 * i;
+          const x = p.x + HEX_RADIUS * Math.cos(angle), y = p.y + HEX_RADIUS * Math.sin(angle);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      });
+    });
+    ctx.restore();
+  }
+
   // The margin beside the hex board (plenty of it — the board doesn't fill the canvas width)
   // used for a simple always-visible readout of what's actually affecting this fight, since
   // affixes otherwise only ever showed up on the pre-fight choice card and then disappeared.
@@ -2729,6 +2861,7 @@
     ctx.fillStyle = '#23232b';
     ctx.fillRect(0, 0, W, H);
     drawHexGrid();
+    drawSmokeZones();
     if (phase === 'combat') { drawTargetHighlight(); drawSideHUD(); }
 
     // Hero — shake is a small random jitter (reaction to being hit); lunge is a smooth forward
@@ -2824,14 +2957,25 @@
           ctx.fill();
         });
       } else if (e.type === 'cleaveSlice') {
-        // A vertical slash cutting down through the stacked front row, bulging sideways.
+        // Arcs across the actual hexes hit: start at one flank, bulge through the target hex
+        // (the quadratic control point), end at the other flank. Falls back to a straight line
+        // (2 hexes) or a small burst (1 hex, e.g. a Spear/Crossbow Cleave with no flanking hex
+        // available) when there weren't 3 hexes to arc across.
+        const pts = e.points;
         ctx.save();
         ctx.globalAlpha = a * 0.9;
         ctx.strokeStyle = '#b9c2cc';
         ctx.lineWidth = 4 + 10 * a;
         ctx.beginPath();
-        ctx.moveTo(e.x - 34, e.yTop);
-        ctx.quadraticCurveTo(e.x + 34, (e.yTop + e.yBottom) / 2, e.x - 34, e.yBottom);
+        if (pts.length >= 3) {
+          ctx.moveTo(pts[0].x, pts[0].y);
+          ctx.quadraticCurveTo(pts[1].x, pts[1].y, pts[2].x, pts[2].y);
+        } else if (pts.length === 2) {
+          ctx.moveTo(pts[0].x, pts[0].y);
+          ctx.lineTo(pts[1].x, pts[1].y);
+        } else {
+          ctx.arc(pts[0].x, pts[0].y, 22, 0, Math.PI * 2);
+        }
         ctx.stroke();
         ctx.restore();
       } else if (e.type === 'bolt') {
@@ -2869,7 +3013,7 @@
         });
       } else if (e.type === 'shockwave') {
         const t = 1 - a;
-        const maxR = HEX_COL_SPACING * 3.3; // roughly covers 3 hex-rings outward
+        const maxR = HEX_COL_SPACING * 2.3; // roughly covers 2 hex-rings outward
         ctx.save();
         ctx.globalAlpha = a * 0.7;
         ctx.strokeStyle = '#ffd479';
@@ -2938,6 +3082,40 @@
     return { row, idx };
   }
 
+  // Same BFS-first-step shape as findStepToward, but the goal is "any hex not currently
+  // smoked" instead of "within range of a target" — used to make smoked enemies flee the haze
+  // (see triggerSmokeScreen/isHexSmoked) rather than advance on the hero.
+  function findStepAwayFromSmoke(fromHex, occupied) {
+    const startKey = hexKey(fromHex.row, fromHex.idx);
+    const cameFrom = new Map();
+    const visited = new Set([startKey]);
+    let frontier = [fromHex];
+    let goalKey = null;
+
+    while (frontier.length && !goalKey) {
+      const next = [];
+      for (const hex of frontier) {
+        const hexK = hexKey(hex.row, hex.idx);
+        for (const n of neighborsOf(hex.row, hex.idx)) {
+          const k = hexKey(n.row, n.idx);
+          if (visited.has(k) || occupied.has(k)) continue;
+          visited.add(k);
+          cameFrom.set(k, hexK);
+          if (!isHexSmoked(n)) { goalKey = k; break; }
+          next.push(n);
+        }
+        if (goalKey) break;
+      }
+      frontier = next;
+    }
+    if (!goalKey) return null; // boxed in — every reachable hex is still smoked or occupied
+
+    let curKey = goalKey, parentKey = cameFrom.get(curKey);
+    while (parentKey !== startKey) { curKey = parentKey; parentKey = cameFrom.get(curKey); }
+    const [row, idx] = curKey.split(',').map(Number);
+    return { row, idx };
+  }
+
   // Every unit farther than its role's range steps toward the hero — closer units move first
   // each tick, claiming their destination hex immediately, so a farther unit can never land on
   // a hex someone closer already took (the "priority queue" that avoids two units on one hex).
@@ -2951,8 +3129,29 @@
     if (hero.decoy) occupied.add(hexKey(hero.decoy.hex.row, hero.decoy.hex.idx));
     queue.forEach(e => occupied.add(hexKey(e.hex.row, e.hex.idx)));
 
-    queue
-      .filter(e => !(e.stunTimer > 0))
+    const movable = queue.filter(e => !(e.stunTimer > 0));
+
+    // Snapshot smoked status BEFORE either pass moves anything — otherwise an enemy that flees
+    // out of the smoke this tick would immediately read as "not smoked" and get swept up by the
+    // approach pass in the very same tick, canceling its own escape step.
+    const wasSmoked = new Map(movable.map(e => [e, isHexSmoked(e.hex)]));
+
+    // Smoked enemies flee the haze instead of approaching — resolved first so both groups draw
+    // from the same occupied set and never claim the same hex. smokeStepReady toggles every
+    // tick so a fleeing enemy only actually steps every other tick (SMOKE_SLOW_MULT = 50% speed).
+    movable.filter(e => wasSmoked.get(e)).forEach(e => {
+      e.smokeStepReady = !e.smokeStepReady;
+      if (!e.smokeStepReady) return;
+      const step = findStepAwayFromSmoke(e.hex, occupied);
+      if (step) {
+        occupied.delete(hexKey(e.hex.row, e.hex.idx));
+        e.hex = step;
+        occupied.add(hexKey(step.row, step.idx));
+      }
+    });
+
+    movable
+      .filter(e => !wasSmoked.get(e))
       .map(e => ({ e, dist: hexDistance(e.hex, target) }))
       .filter(({ e, dist }) => dist > ROLE_RANGE[e.role])
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
@@ -2979,6 +3178,34 @@
     if (step) heroHex = step;
   }
 
+  // Lets the player pick their own starting position before a fight — click any hex on the
+  // board (found by nearest-center among every hex, not exact flat-top-hex math — the board is
+  // small enough that this is plenty precise) that isn't already occupied by an enemy. Only
+  // during prep, and repeatable as many times as you want right up until Start Fight.
+  function hexAt(canvasX, canvasY) {
+    let best = null, bestDist = Infinity;
+    allHexes().forEach(h => {
+      const p = hexPixelPos(h.row, h.idx);
+      const d = Math.hypot(p.x - canvasX, p.y - canvasY);
+      if (d < bestDist) { bestDist = d; best = h; }
+    });
+    return bestDist <= HEX_RADIUS ? best : null;
+  }
+
+  function onBoardClick(evt) {
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
+    const canvas = document.getElementById('game');
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    const x = (evt.clientX - rect.left) * scaleX;
+    const y = (evt.clientY - rect.top) * scaleY;
+    const hex = hexAt(x, y);
+    if (!hex) return;
+    if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return; // enemies block it
+    heroHex = hex;
+    renderAll();
+  }
+
   function simulationStep() {
     if (phase !== 'combat') return;
     lastSimStepTime = performance.now();
@@ -2996,6 +3223,14 @@
     // the hero to full while they read the reward cards, and Plagued's poison could keep
     // ticking (and even kill them) after the fight was already won.
     if (s.regen > 0 && queue.length) hero.hp = Math.min(s.maxHP, hero.hp + s.regen * simDt);
+
+    // Smoke Screen zones tick down in real sim-time and expire on their own once their
+    // SMOKE_DURATION runs out — same queue.length gate as regen/poison above so a zone doesn't
+    // silently expire while the post-victory reward modal is still up.
+    if (smokeZones.length && queue.length) {
+      smokeZones.forEach(z => z.timer -= simDt);
+      smokeZones = smokeZones.filter(z => z.timer > 0);
+    }
 
     // Plagued affix — a stacking rot that ticks for the rest of the fight once you've been
     // hit at least once, scaled off whichever enemy last inflicted a stack (see enemyAttack)
@@ -3020,14 +3255,17 @@
     }
 
     Object.keys(ABILITY_CFG).forEach(id => {
-      if (!isEquipped(id)) return;
+      if (!isEquipped(id) || !queue.length) return; // same "stop once the fight's actually won"
+                                                      // rule as regen/poison — see simulationStep
       const cfg = ABILITY_CFG[id];
+      const effectiveCooldown = cfg.cooldown * (1 - s.cooldownReductionPct);
       hero.cooldowns[id] = (hero.cooldowns[id] || 0) + simDt;
-      while (hero.cooldowns[id] >= cfg.cooldown && phase === 'combat' && queue.length) {
-        hero.cooldowns[id] -= cfg.cooldown;
+      while (hero.cooldowns[id] >= effectiveCooldown && phase === 'combat' && queue.length) {
+        hero.cooldowns[id] -= effectiveCooldown;
         if (id === 'cleave') triggerCleave();
         if (id === 'afterimage') triggerAfterImage();
         if (id === 'shockwave') triggerShockwave();
+        if (id === 'smokescreen') triggerSmokeScreen();
       }
     });
 
@@ -3040,6 +3278,7 @@
     queue.slice().forEach(enemy => {
       if (phase !== 'combat' || !queue.includes(enemy)) return;
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
+      if (isHexSmoked(enemy.hex)) return; // smoked enemies can't attack until they step out
       if (hexDistance(enemy.hex, enemyTarget) > ROLE_RANGE[enemy.role]) return;
       enemy.atkTimer += simDt;
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
@@ -3101,7 +3340,8 @@
     document.getElementById('log').innerHTML = '';
     document.getElementById('gameOverModal').classList.add('hidden');
     document.getElementById('talismanModal').classList.add('hidden');
-    document.getElementById('pathModal').classList.add('hidden');
+    document.getElementById('pathPanel').style.display = 'none';
+    document.getElementById('game').style.display = '';
     document.getElementById('roomModal').classList.add('hidden');
     log('A new attempt begins.', 'wave');
     // Every run opens with a choice of 1 of 3 starter majors (auto-equipped immediately since
@@ -3115,6 +3355,7 @@
   }
 
   document.getElementById('startWaveBtn').addEventListener('click', startFight);
+  document.getElementById('game').addEventListener('click', onBoardClick);
   document.getElementById('restartBtn').addEventListener('click', restart);
   document.getElementById('wipeBtn').addEventListener('click', () => {
     if (window.confirm('This permanently erases your Legacy upgrades, essence and best wave record. Continue?')) wipeAllProgress();
