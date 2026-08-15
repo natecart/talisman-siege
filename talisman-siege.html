@@ -3150,15 +3150,26 @@
       }
     });
 
+    // Approaching enemies route around active smoke patches rather than straight through them —
+    // otherwise an enemy that just fled the haze immediately paths right back into it (the
+    // shortest route to the hero often cuts through the same hexes it was just fleeing),
+    // producing an endless flee/re-enter loop instead of ever actually reaching the hero.
+    // Falls back to the un-avoiding occupied set if smoke fully blocks every route (e.g. the
+    // hero itself is inside the patch), so an enemy is never permanently stuck refusing to move.
+    const smokeAvoidingOccupied = new Set(occupied);
+    smokeZones.forEach(z => z.hexes.forEach(h => smokeAvoidingOccupied.add(hexKey(h.row, h.idx))));
+
     movable
       .filter(e => !wasSmoked.get(e))
       .map(e => ({ e, dist: hexDistance(e.hex, target) }))
       .filter(({ e, dist }) => dist > ROLE_RANGE[e.role])
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
       .forEach(({ e }) => {
-        const step = findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied);
+        const step = findStepToward(e.hex, target, ROLE_RANGE[e.role], smokeAvoidingOccupied)
+          || findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied);
         if (step) {
           occupied.delete(hexKey(e.hex.row, e.hex.idx));
+          smokeAvoidingOccupied.delete(hexKey(e.hex.row, e.hex.idx));
           e.hex = step;
           occupied.add(hexKey(step.row, step.idx));
         }
