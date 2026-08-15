@@ -131,6 +131,8 @@
   .shopBuy { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
   .shopCost { font-size: 11px; color: #d8b84a; }
   .legacyNote { margin: 0 0 8px; color: #777; font-size: 11.5px; }
+  .shopGoldRow { font-size: 15px; color: #bbb; margin-bottom: 8px; }
+  .shopGoldRow b { color: #f0c14b; }
   .shopControls { display: flex; gap: 6px; margin-bottom: 8px; }
   .shopControls button { flex: 1; font-size: 11.5px; padding: 5px 6px; }
   #shopFreezeBtn.active { background: #2a3f5c; border-color: #3d6ecb; color: #a8c8f0; }
@@ -239,7 +241,6 @@
   <div id="topbar">
     <div class="stat">Floor <b id="floorNum">1</b></div>
     <div class="stat">Depth <b id="waveNum">1</b></div>
-    <div class="stat">Gold <b id="goldAmt">0</b></div>
     <div class="stat">Best Depth <b id="bestWave">0</b></div>
     <div class="stat">Essence <b id="essenceAmt">0</b></div>
     <div class="spacer"></div>
@@ -268,7 +269,6 @@
         <div class="statRow"><span>Damage</span><span id="statDamage">-</span></div>
         <div class="statRow"><span>Attack Speed</span><span id="statAtkSpeed">-</span></div>
         <div class="statRow"><span>Armor</span><span id="statArmor">-</span></div>
-        <div class="statRow"><span>Gold / Round</span><span id="statGold">-</span></div>
         <!-- These rows only appear once something has unlocked that stat (see isStatUnlocked) -->
         <div class="statRow" id="statRowDamageReduction" style="display:none"><span>Damage Reduction</span><span id="statDamageReduction">-</span></div>
         <div class="statRow" id="statRowCritChance" style="display:none"><span>Crit Chance</span><span id="statCrit">-</span></div>
@@ -293,6 +293,7 @@
         </div>
         <div id="loadoutTabContent"></div>
         <div id="shopTabContent">
+          <div class="shopGoldRow">Gold <b id="goldAmt">0</b></div>
           <div class="shopControls">
             <button id="shopFreezeBtn" title="Keep this exact shop for the next prep phase">Freeze Shop</button>
             <button id="shopRerollBtn" title="Spend gold to reroll all 5 slots right now">Reroll (1g)</button>
@@ -466,7 +467,6 @@
     { id: 'atkSpeed',  name: 'Swift Strikes',    desc: '+0.1 Attack Speed',      baseCost: 10, mult: 1.18, category: 'generic', maxLevel: 10 },
     { id: 'maxHP',     name: 'Vitality',         desc: '+15 Max HP',             baseCost: 8,  mult: 1.15, category: 'generic', maxLevel: 10 },
     { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 12, mult: 1.22, category: 'generic', maxLevel: 10 },
-    { id: 'gold',      name: 'Prospecting',      desc: '+10 Gold per wave',      baseCost: 10, mult: 1.17, category: 'generic', maxLevel: 10 },
 
     // --- Damage Reduction: unlocks once Armor is maxed, the scaling counterpart to Armor ---
     { id: 'ironResolve', name: 'Iron Resolve',   desc: 'Unlock Damage Reduction', baseCost: 20, mult: 1, category: 'archetype', maxLevel: 1, requiresMaxed: 'armor', unlocksStat: 'damageReduction' },
@@ -480,6 +480,8 @@
   // ---------------- Data: ability talismans (cooldown-driven, independent of your attack) ----------------
   const ABILITY_CFG = {
     cleave: { cooldown: 4, dmgMult: 1.0 },
+    afterimage: { cooldown: 10 },
+    shockwave: { cooldown: 5 },
   };
 
   // ---------------- Data: talismans ----------------
@@ -489,7 +491,7 @@
   const TALISMANS = [
     { id: 'bloodthirst', tier: 'minor', icon: '\u{1F489}', name: 'Bloodthirst',   desc: 'Heal for 10% of damage dealt.', unlocksStat: 'lifesteal' },
     { id: 'momentum',    tier: 'minor', icon: '\u{1F3C3}', name: 'Momentum',      desc: 'Attack speed +2% per wave cleared, stacking up to +40%.' },
-    { id: 'goldentouch', tier: 'minor', icon: '\u{1F4B0}', name: 'Golden Touch',  desc: '+30% gold earned.' },
+    { id: 'bountyhunter', tier: 'minor', icon: '\u{1FA99}', name: 'Bounty Hunter', desc: '+2 gold per kill.' },
     { id: 'thickhide',   tier: 'minor', icon: '\u{1F6E1}', name: 'Thick Hide',    desc: '+25% max HP, -10% damage dealt.' },
     { id: 'glasscannon', tier: 'minor', icon: '\u{1F4A5}', name: 'Glass Cannon',  desc: '+40% damage, -25% max HP.' },
     { id: 'regen',       tier: 'minor', icon: '\u{2764}',  name: 'Regeneration',  desc: 'Regen 2.5% of max HP per second.', unlocksStat: 'regen' },
@@ -502,7 +504,11 @@
     { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP.' },
     { id: 'overcharge',  tier: 'major', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.' },
     { id: 'executioner', tier: 'major', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.' },
+    { id: 'goldentouch', tier: 'major', icon: '\u{1F4B0}', name: 'Golden Touch',  desc: '+30% gold earned, from kills and from combat rewards alike.' },
     { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage.` },
+    { id: 'electricshock', tier: 'major', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack arcs to every enemy adjacent to your target for bonus damage.' },
+    { id: 'afterimage', tier: 'major', type: 'ability', icon: '\u{1F465}', name: 'After Image', desc: `Every ${ABILITY_CFG.afterimage.cooldown}s, swap places with a decoy sent to the safest hex 4 tiles out. The decoy has 20% of your max HP and draws enemy attacks in your place.` },
+    { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 3 hexes, stunning enemies for 1.5s/1s/0.5s the closer they are.` },
   ];
 
   // ---------------- Data: hero weapons ----------------
@@ -976,7 +982,7 @@
     return {
       hp: 100,
       upgrades: {
-        damage: 0, atkSpeed: 0, maxHP: 0, armor: 0, gold: 0,
+        damage: 0, atkSpeed: 0, maxHP: 0, armor: 0,
         ironResolve: 0, kineticWard: 0, fleetReflexes: 0, adrenalFocus: 0,
       },
       talismanBag: [],              // every talisman ever acquired this run, owned but not necessarily active
@@ -986,6 +992,7 @@
       attackCount: 0, atkTimer: 0, cooldowns: {}, momentumStacks: 0, secondWindUsedThisWave: false,
       restBuffFightsRemaining: 0, // Wanderer's Inn "Rest" — see computeStats and waveCleared
       poisonStacks: 0, plaguedDmgRef: 0, // Plagued affix — see enemyAttack and simulationStep, reset each fight
+      decoy: null, // After Image's decoy: { hex, hp, maxHp } while up — see triggerAfterImage, reset each fight
     };
   }
 
@@ -1048,11 +1055,11 @@
     let armor = 0 + 1 * u.armor;
     // Damage Reduction: simple additive now, capped at 5 levels × 10% = 50% max.
     let damageReductionPct = Math.min(0.5, 0.10 * u.kineticWard);
-    // Gold Gain's Tier 1 is a flat bonus paid once per wave (see waveCleared); the % multiplier
-    // is now purely Legacy + Golden Touch, since the shop-side Gold Gain % tier was removed.
-    let goldPerRound = 10 * u.gold;
+    // Gold generation lives entirely in talismans now (Golden Touch, Bounty Hunter) — no shop
+    // or Legacy path grants it at all.
     let goldMult = 1;
     let shopCostMult = 1;
+    let bonusGoldPerKill = 0;
 
     // Crit Damage is now a fixed rule, not a stat — every crit simply deals double.
     const critDamage = 2.0;
@@ -1066,6 +1073,7 @@
     if (has('thickhide')) { maxHP *= 1.25; dmg *= 0.90; }
     if (has('glasscannon')) { dmg *= 1.40; maxHP *= 0.75; }
     if (has('goldentouch')) goldMult *= 1.3;
+    if (has('bountyhunter')) bonusGoldPerKill += 2;
     if (has('regen')) regen += maxHP * 0.025;
     if (has('luckycharm')) dodgeChance += 0.12;
     if (has('thorns')) thornsPct += 0.25;
@@ -1086,13 +1094,13 @@
     // buff (see the design discussion — 2 fights vs. the 3-combat gap between rest stops).
     if (hero.restBuffFightsRemaining > 0) {
       dmg *= 1.1; atkSpeed *= 1.1; maxHP *= 1.1; armor *= 1.1; regen *= 1.1;
-      goldPerRound *= 1.1; goldMult *= 1.1; thornsPct *= 1.1; lifestealPct *= 1.1;
+      goldMult *= 1.1; thornsPct *= 1.1; lifestealPct *= 1.1;
       damageReductionPct = Math.min(0.5, damageReductionPct * 1.1);
       critChance = Math.min(0.75, critChance * 1.1);
       dodgeChance = Math.min(1, dodgeChance * 1.1);
     }
 
-    return { dmg, atkSpeed, maxHP: Math.round(maxHP), armor, damageReductionPct, critChance, critDamage, regen, goldPerRound, goldMult, shopCostMult, dodgeChance, thornsPct, lifestealPct, atkRange };
+    return { dmg, atkSpeed, maxHP: Math.round(maxHP), armor, damageReductionPct, critChance, critDamage, regen, bonusGoldPerKill, goldMult, shopCostMult, dodgeChance, thornsPct, lifestealPct, atkRange };
   }
 
   // A stat is unlocked the instant you own something tagged to unlock it — no separate
@@ -1121,6 +1129,7 @@
       // a Brute is Miniboss-weight but not isBoss.
       typeId: o.typeId || null, // the named ENEMY_TYPES key (see ENEMY_VISUALS) — null for the boss, which has no named type
       hp, maxHp: hp, damage: dmg, atkTimer: Math.random() * 0.4, flash: 0, lunge: 0,
+      stunTimer: 0, // Shockwave — see triggerShockwave/simulationStep/resolveEnemyMovement
     };
   }
 
@@ -1204,6 +1213,28 @@
   // effect already makes). Drawn as a segment interpolated along that line by (1 - life).
   function spawnBolt(x1, y1, x2, y2) {
     effects.push({ type: 'bolt', x1, y1, x2, y2, life: 1 });
+  }
+  // Electric Shock's bounce — a jagged zigzag between the struck enemy and whichever neighbor
+  // it's arcing to. The midpoint offset is rolled once at spawn (not every frame), so the bolt
+  // holds a stable jagged shape as it fades instead of flickering.
+  function spawnShock(x1, y1, x2, y2) {
+    const midX = (x1 + x2) / 2 + (Math.random() - 0.5) * 14;
+    const midY = (y1 + y2) / 2 + (Math.random() - 0.5) * 14;
+    effects.push({ type: 'shock', x1, y1, x2, y2, midX, midY, life: 1 });
+  }
+  // A brief puff at both hexes when the Hero swaps with an After Image decoy.
+  function spawnSmoke(x, y) {
+    const parts = [];
+    for (let i = 0; i < 8; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = 4 + Math.random() * 14;
+      parts.push({ dx: Math.cos(ang) * dist, dy: Math.sin(ang) * dist, r: 3 + Math.random() * 4 });
+    }
+    effects.push({ type: 'smoke', x, y, life: 1, parts });
+  }
+  // Shockwave's expanding ring, centered on the hero's hex at the moment it fires.
+  function spawnShockwaveRing(x, y) {
+    effects.push({ type: 'shockwave', x, y, life: 1 });
   }
 
   function healHero(amount) {
@@ -1291,6 +1322,26 @@
     applyLifesteal(dmg);
     applyAffixReactions(target, dmg);
 
+    // Electric Shock — every 4th attack, the hit arcs from the struck target to every enemy
+    // adjacent to ITS hex (not the hero's), so it rewards attacking into a cluster rather than
+    // just being a flat damage multiplier like Overcharge. Uses target.hex, which is still
+    // valid here even if the main hit just killed it — killEnemy hasn't run yet.
+    if (isEquipped('electricshock') && hero.attackCount % 4 === 0) {
+      const shockDmg = Math.max(1, Math.round(s.dmg * 0.5));
+      const chainTargets = queue.filter(e => e !== target && hexDistance(e.hex, target.hex) <= 1);
+      if (chainTargets.length) log(`Electric Shock arcs to ${chainTargets.length} more enem${chainTargets.length > 1 ? 'ies' : 'y'}!`, 'crit');
+      chainTargets.forEach(e => {
+        e.hp -= shockDmg;
+        e.flash = 1;
+        const ep = enemyPos(e);
+        spawnShock(p.x, p.y, ep.x, ep.y);
+        spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(shockDmg), '#7ec8ff');
+        applyLifesteal(shockDmg);
+        applyAffixReactions(e, shockDmg);
+      });
+      chainTargets.filter(e => e.hp <= 0).forEach(killEnemy);
+    }
+
     if (target.hp <= 0) killEnemy(target);
   }
 
@@ -1330,6 +1381,58 @@
     targets.filter(e => e.hp <= 0).forEach(killEnemy);
   }
 
+  // Picks where the After Image decoy lands: the hex 4 rings out that maximizes distance to
+  // the nearest living enemy ("the safest hex"), falling back to a closer ring only if nothing
+  // at distance 4 is free (board edge, or every distance-4 hex is occupied).
+  function pickAfterImageHex() {
+    const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
+    for (let d = 4; d >= 1; d--) {
+      const ring = allHexes().filter(h => hexDistance(h, heroHex) === d && !occupied.has(hexKey(h.row, h.idx)));
+      if (!ring.length) continue;
+      let best = null, bestScore = -1;
+      ring.forEach(h => {
+        const minEnemyDist = queue.length ? Math.min(...queue.map(e => hexDistance(h, e.hex))) : 99;
+        if (minEnemyDist > bestScore) { bestScore = minEnemyDist; best = h; }
+      });
+      return best;
+    }
+    return null;
+  }
+
+  // After Image — instantly swaps the hero with a decoy left at the old hex (see aggroHex,
+  // resolveEnemyMovement, and enemyAttack for how enemies then target the decoy instead of the
+  // real hero). Snap, not a travel animation — matches how every other unit already moves.
+  function triggerAfterImage() {
+    const dest = pickAfterImageHex();
+    if (!dest) return; // no open hex anywhere — board fully occupied, shouldn't happen in practice
+    const s = computeStats();
+    const oldHex = { ...heroHex };
+    hero.decoy = { hex: oldHex, hp: Math.round(s.maxHP * 0.2), maxHp: Math.round(s.maxHP * 0.2) };
+    heroHex = dest;
+    heroTargetId = null; // hero relocated — re-pick target fresh from the new position
+    const oldP = hexPixelPos(oldHex.row, oldHex.idx);
+    const newP = hexPixelPos(dest.row, dest.idx);
+    spawnSmoke(oldP.x, oldP.y);
+    spawnSmoke(newP.x, newP.y);
+    log('You swap places with an After Image.', 'crit');
+  }
+
+  // Shockwave — an instant pulse (no travel time to the logic, just the visual ring) that stuns
+  // every enemy within 3 hexes, shorter the farther out it reaches.
+  function triggerShockwave() {
+    const hp = heroPixelPos();
+    spawnShockwaveRing(hp.x, hp.y);
+    let hitAny = false;
+    queue.forEach(enemy => {
+      const d = hexDistance(enemy.hex, heroHex);
+      if (d > 3) return;
+      const stunDur = d === 1 ? 1.5 : d === 2 ? 1.0 : 0.5;
+      enemy.stunTimer = Math.max(enemy.stunTimer || 0, stunDur);
+      hitAny = true;
+    });
+    if (hitAny) log('Shockwave ripples out, stunning nearby enemies!', 'crit');
+  }
+
   // Cursed/Vampiric are the two affixes that react to the hero DEALING damage (as opposed to
   // Undying/Bloodlust/Horde, which are baked into the encounter's stats at generation time —
   // see applyAffixStats). Not applied to Executioner's instant kill (no real "damage dealt"
@@ -1353,7 +1456,7 @@
 
   function killEnemy(enemy) {
     const s = computeStats();
-    const goldGain = Math.round((GOLD_CFG.perKillBase + GOLD_CFG.perKillPerWave * wave) * s.goldMult);
+    const goldGain = Math.round((GOLD_CFG.perKillBase + GOLD_CFG.perKillPerWave * wave + s.bonusGoldPerKill) * s.goldMult);
     gold += goldGain;
     log(`Defeated ${enemy.isBoss ? 'the boss' : 'an enemy'} (+${goldGain}g).`);
     const idx = queue.indexOf(enemy);
@@ -1368,6 +1471,11 @@
   function enemyAttack(enemy) {
     const s = computeStats();
     enemy.lunge = 1; // lunges toward the hero even on a miss — it still took the swing
+    // While an After Image decoy is up, every enemy currently eligible to attack this tick got
+    // there via aggroHex() resolving to the decoy's hex (see simulationStep) — so if the decoy
+    // exists at all, this attack is aimed at it, not the real hero.
+    const decoy = hero.decoy;
+    const targetPos = decoy ? hexPixelPos(decoy.hex.row, decoy.hex.idx) : heroPixelPos();
     const visuals = ENEMY_VISUALS[enemy.typeId] || {};
     if (visuals.weaponShape === 'crossbow') {
       // The bolt has to originate from where the crossbow itself is drawn — offset forward
@@ -1375,13 +1483,12 @@
       // currently facing — not the raw hex-center point, or it'd look like it's firing from
       // the middle of its own body.
       const ep = enemyPos(enemy);
-      const hp0 = heroPixelPos();
-      const facing = Math.atan2(hp0.y - ep.y, hp0.x - ep.x);
+      const facing = Math.atan2(targetPos.y - ep.y, targetPos.x - ep.x);
       const localX = ep.r * (visuals.weaponBaseReach ?? 0.5);
       const localY = ep.r * WEAPON_SIDE;
       const originX = ep.x + localX * Math.cos(facing) - localY * Math.sin(facing);
       const originY = ep.y + localX * Math.sin(facing) + localY * Math.cos(facing);
-      spawnBolt(originX, originY, hp0.x, hp0.y);
+      spawnBolt(originX, originY, targetPos.x, targetPos.y);
     }
     if (Math.random() < s.dodgeChance) {
       log('You dodged the attack!', 'dodge');
@@ -1390,11 +1497,24 @@
     // Armor subtracts flat first; Damage Reduction % (a separate unlocked stat, see Iron
     // Resolve/Kinetic Ward) then takes a cut of whatever's left — two distinct mitigation layers.
     let dmg = Math.max(1, Math.round((enemy.damage - s.armor) * (1 - s.damageReductionPct)));
+
+    if (decoy) {
+      // The decoy is a conjured illusion, not the hero's own flesh — hits against it never
+      // apply Plagued stacks, Thorns reflect, or the real death check.
+      decoy.hp -= dmg;
+      spawnSplash(targetPos.x, targetPos.y - 10);
+      spawnDamageNumber(targetPos.x, targetPos.y - 45, String(dmg), '#e06666');
+      if (decoy.hp <= 0) {
+        hero.decoy = null;
+        log('Your After Image shatters!', 'wave');
+      }
+      return;
+    }
+
     hero.hp -= dmg;
     heroFlash = 1;
-    const hp = heroPixelPos();
-    spawnSplash(hp.x, hp.y - 10);
-    spawnDamageNumber(hp.x, hp.y - 45, String(dmg), '#e06666');
+    spawnSplash(targetPos.x, targetPos.y - 10);
+    spawnDamageNumber(targetPos.x, targetPos.y - 45, String(dmg), '#e06666');
 
     const affixes = (chosenEncounter && chosenEncounter.affixes) || [];
     // Poison scales off whichever specific enemy inflicted the stack (its own already
@@ -1436,19 +1556,12 @@
     const wasBoss = enc.tierKey === 'boss';
     const s = computeStats();
 
-    // Gold/Round is a flat per-encounter economy bonus (from the shop's Prospecting upgrade)
-    // independent of which reward card was picked — it needs to tick on every combat clear,
-    // not just ones that happened to roll a gold reward instead of a talisman.
-    const perRoundGold = Math.round(s.goldPerRound * s.goldMult);
-    if (perRoundGold > 0) gold += perRoundGold;
-    const perRoundNote = perRoundGold > 0 ? ` (+${perRoundGold}g/round)` : '';
-
     if (enc.rewardType === 'gold') {
       const bonus = Math.round(enc.goldAmount * s.goldMult);
       gold += bonus;
-      log(`Encounter cleared! (+${bonus}g${perRoundGold > 0 ? ` +${perRoundGold}g/round` : ''})`, 'wave');
+      log(`Encounter cleared! (+${bonus}g)`, 'wave');
     } else if (!wasBoss) {
-      log(`Encounter cleared!${perRoundNote}`, 'wave');
+      log(`Encounter cleared!`, 'wave');
     }
     // The boss doesn't get a card selection (see generateBossEncounter), so there's no
     // "opportunity cost" already baked into its reward the way a picked card has — it always
@@ -1456,7 +1569,7 @@
     if (wasBoss) {
       const bossBonus = Math.round((GOLD_CFG.waveClearBase + GOLD_CFG.waveClearPerWave * clearedDepth) * 3 * s.goldMult);
       gold += bossBonus;
-      log(`Floor ${floor} boss defeated! (+${bossBonus}g bonus${perRoundGold > 0 ? ` +${perRoundGold}g/round` : ''})`, 'wave');
+      log(`Floor ${floor} boss defeated! (+${bossBonus}g bonus)`, 'wave');
     }
 
     hero.momentumStacks++;
@@ -1774,6 +1887,7 @@
     hero.atkTimer = 0;
     hero.poisonStacks = 0;
     hero.plaguedDmgRef = 0;
+    hero.decoy = null;
     heroTargetId = null;
     phase = 'combat';
     log(`Encounter begins: ${chosenEncounter.desc}`, 'wave');
@@ -1909,7 +2023,6 @@
     document.getElementById('statDamage').textContent = Math.round(s.dmg);
     document.getElementById('statAtkSpeed').textContent = s.atkSpeed.toFixed(2) + '/s';
     document.getElementById('statArmor').textContent = s.armor;
-    document.getElementById('statGold').textContent = Math.round(s.goldPerRound);
     setStatRow('statRowDamageReduction', 'damageReduction', Math.round(s.damageReductionPct * 100) + '%');
     setStatRow('statRowCritChance', 'critChance', Math.round(s.critChance * 100) + '%');
     setStatRow('statRowRegen', 'regen', s.regen.toFixed(1) + '/s');
@@ -2637,6 +2750,18 @@
     drawFacingUnit(heroP.x + heroShake + heroLungeOff.x, heroP.y + heroLungeOff.y, HERO_RADIUS, heroAngle, hero.hp > 0 ? '#4d8fdb' : '#555', false, heroAtkProgress, HERO_WEAPON_VISUALS[hero.equippedWeapon]);
     drawHealthBar(heroP.x, heroP.y - 55, 80, hero.hp / s.maxHP, '#5ac36a');
 
+    // After Image's decoy — a translucent copy of the hero standing at the hex it swapped out
+    // of, with its own (much smaller) health bar. Enemies target it instead of the real hero
+    // for as long as it's up — see aggroHex/enemyAttack.
+    if (hero.decoy) {
+      const dp = hexPixelPos(hero.decoy.hex.row, hero.decoy.hex.idx);
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      drawFacingUnit(dp.x, dp.y, HERO_RADIUS, 0, '#4d8fdb', false, 0, HERO_WEAPON_VISUALS[hero.equippedWeapon]);
+      ctx.restore();
+      drawHealthBar(dp.x, dp.y - 55, 60, hero.decoy.hp / hero.decoy.maxHp, '#8fa8c9');
+    }
+
     // Enemies — each sits on its own hex; color reflects role (melee/reach/ranged) so it's
     // visible at a glance which threats are closing in and which are already dug in at range.
     // Rendered during 'prepping'/'beginnerPrep' too, since the queue is now built the moment
@@ -2654,6 +2779,14 @@
         const visuals = (enemy.typeId && ENEMY_VISUALS[enemy.typeId]) || {};
         drawFacingUnit(p.x + shake + lungeOff.x, p.y + lungeOff.y, p.r, angle, color, notable, atkProgress, { ...visuals, hitProgress: enemy.flash });
         drawHealthBar(p.x, p.y - p.r - 16, p.r * 2.2, enemy.hp / enemy.maxHp, '#e05a5a');
+        if (enemy.stunTimer > 0) {
+          ctx.save();
+          ctx.fillStyle = '#ffd479';
+          ctx.font = 'bold 13px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.fillText('✱', p.x, p.y - p.r - 22);
+          ctx.restore();
+        }
       });
     } else {
       ctx.fillStyle = '#666';
@@ -2713,6 +2846,36 @@
         ctx.beginPath();
         ctx.moveTo(e.x1 + (e.x2 - e.x1) * tTail, e.y1 + (e.y2 - e.y1) * tTail);
         ctx.lineTo(e.x1 + (e.x2 - e.x1) * t, e.y1 + (e.y2 - e.y1) * t);
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === 'shock') {
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#7ec8ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(e.x1, e.y1);
+        ctx.lineTo(e.midX, e.midY);
+        ctx.lineTo(e.x2, e.y2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === 'smoke') {
+        ctx.globalAlpha = a * 0.6;
+        ctx.fillStyle = '#aaaaaa';
+        e.parts.forEach(pt => {
+          ctx.beginPath();
+          ctx.arc(e.x + pt.dx * (1.3 - a), e.y + pt.dy * (1.3 - a), pt.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      } else if (e.type === 'shockwave') {
+        const t = 1 - a;
+        const maxR = HEX_COL_SPACING * 3.3; // roughly covers 3 hex-rings outward
+        ctx.save();
+        ctx.globalAlpha = a * 0.7;
+        ctx.strokeStyle = '#ffd479';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, maxR * t, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
       }
@@ -2778,16 +2941,23 @@
   // Every unit farther than its role's range steps toward the hero — closer units move first
   // each tick, claiming their destination hex immediately, so a farther unit can never land on
   // a hex someone closer already took (the "priority queue" that avoids two units on one hex).
+  // Whichever hex enemies currently perceive as "the hero" — the After Image decoy while it's
+  // up (it's what's standing where they last saw the hero), otherwise the hero's real hex.
+  function aggroHex() { return hero.decoy ? hero.decoy.hex : heroHex; }
+
   function resolveEnemyMovement() {
+    const target = aggroHex();
     const occupied = new Set([hexKey(heroHex.row, heroHex.idx)]);
+    if (hero.decoy) occupied.add(hexKey(hero.decoy.hex.row, hero.decoy.hex.idx));
     queue.forEach(e => occupied.add(hexKey(e.hex.row, e.hex.idx)));
 
     queue
-      .map(e => ({ e, dist: hexDistance(e.hex, heroHex) }))
+      .filter(e => !(e.stunTimer > 0))
+      .map(e => ({ e, dist: hexDistance(e.hex, target) }))
       .filter(({ e, dist }) => dist > ROLE_RANGE[e.role])
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
       .forEach(({ e }) => {
-        const step = findStepToward(e.hex, heroHex, ROLE_RANGE[e.role], occupied);
+        const step = findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied);
         if (step) {
           occupied.delete(hexKey(e.hex.row, e.hex.idx));
           e.hex = step;
@@ -2856,6 +3026,8 @@
       while (hero.cooldowns[id] >= cfg.cooldown && phase === 'combat' && queue.length) {
         hero.cooldowns[id] -= cfg.cooldown;
         if (id === 'cleave') triggerCleave();
+        if (id === 'afterimage') triggerAfterImage();
+        if (id === 'shockwave') triggerShockwave();
       }
     });
 
@@ -2864,9 +3036,11 @@
     // closing the distance just doesn't accumulate attack progress until it arrives — no
     // burst of pent-up attacks the instant it gets there. Snapshot the roster first since an
     // attack (e.g. a Thorns kill) can remove entries mid-loop.
+    const enemyTarget = aggroHex();
     queue.slice().forEach(enemy => {
       if (phase !== 'combat' || !queue.includes(enemy)) return;
-      if (hexDistance(enemy.hex, heroHex) > ROLE_RANGE[enemy.role]) return;
+      if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
+      if (hexDistance(enemy.hex, enemyTarget) > ROLE_RANGE[enemy.role]) return;
       enemy.atkTimer += simDt;
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
         enemy.atkTimer -= enemy.atkInterval;
@@ -2890,7 +3064,11 @@
     });
     dmgNumbers.forEach(n => n.life -= dt * 1.2);
     dmgNumbers = dmgNumbers.filter(n => n.life > 0);
-    effects.forEach(e => { e.life -= dt * (e.type === 'cleaveSlice' ? 1.4 : e.type === 'slash' ? 3.5 : e.type === 'bolt' ? 2.8 : 2); });
+    effects.forEach(e => {
+      const rate = e.type === 'cleaveSlice' ? 1.4 : e.type === 'slash' ? 3.5 : e.type === 'bolt' ? 2.8
+        : e.type === 'shock' ? 4 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2 : 2;
+      e.life -= dt * rate;
+    });
     effects = effects.filter(e => e.life > 0);
 
     draw();
