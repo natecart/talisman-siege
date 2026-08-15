@@ -141,6 +141,7 @@
   .slotRow { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
   .slotChip { cursor: pointer; }
   .slotChip.emptySlot { opacity: 0.4; border-style: dashed; cursor: default; color: #888; }
+  .slotChip.equippedWeapon { border-color: #f0c14b; cursor: default; }
   .tabBar { display: flex; gap: 6px; margin-bottom: 10px; }
   .tabBtn {
     flex: 1;
@@ -501,8 +502,32 @@
     { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP.' },
     { id: 'overcharge',  tier: 'major', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.' },
     { id: 'executioner', tier: 'major', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.' },
-    { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike all front-row enemies for full damage.` },
+    { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage.` },
   ];
+
+  // ---------------- Data: hero weapons ----------------
+  // Independent of talismans — the hero owns all three from the start (see freshHero) and
+  // switches which is equipped from the Loadout tab, same timing rule as talisman re-equipping
+  // (prep phase only). Each one's `role` drives atkRange via ROLE_RANGE, the same lookup enemies
+  // already use, so switching weapons is really just switching which role the hero plays: sword
+  // = melee, spear = reach, crossbow = ranged. `level` doesn't do anything yet (no upgrade path
+  // exists) — it's tracked now so a future leveling system has somewhere to live.
+  const HERO_WEAPONS = {
+    sword:    { id: 'sword',    name: 'Sword',    icon: '\u{1F5E1}\u{FE0F}', role: 'melee' },
+    spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach' },
+    crossbow: { id: 'crossbow', name: 'Crossbow', icon: '\u{1F3F9}', role: 'ranged' },
+  };
+  const HERO_WEAPON_IDS = Object.keys(HERO_WEAPONS);
+
+  // opts fed straight into drawFacingUnit (see its weaponShape dispatch) for whichever weapon
+  // is currently equipped — Spear mirrors the Warband Leader's long reach/thrust, Crossbow
+  // mirrors the Archer's, so switching weapons gives the Hero the same "vibe" that unit already
+  // has rather than inventing a fourth, unrelated visual language.
+  const HERO_WEAPON_VISUALS = {
+    sword:    { weaponShape: 'cross', weaponBaseReach: 0.6, weaponLunge: 0.5, weaponBlade: 0.55, weaponTail: 0.15, weaponGuard: 0.18 },
+    spear:    { weaponShape: 'cross', tipShape: 'triangle', tipWidth: 0.09, weaponBaseReach: 0.75, weaponWindup: 0.3, weaponLunge: 0.65, weaponBlade: 0.55, weaponTail: 0.06, weaponGuard: 0.06 },
+    crossbow: { weaponShape: 'crossbow', weaponBaseReach: 0.4, weaponWindup: 0.32, weaponWindupFrac: 0.75, weaponLunge: 0.1 },
+  };
 
   // ---------------- Wave scaling config ----------------
   // Depth (the `wave` counter) climbs by one per encounter cleared and never resets — it's
@@ -853,16 +878,15 @@
   }
 
   // ---------------- Data: legacy (permanent, bought with essence) ----------------
+  // Deliberately just these three for now — every stat-growth node (Vitality/Warrior's/Swift/
+  // Hardened/Fortune's/Prospector's/Head Start) was cut so Legacy is purely about long-run
+  // capacity (how much you can carry/equip), not a second stat-shop stacked under the real one.
+  // Each is capped (maxLevel) since "+1 slot" stops being the same kind of purchase once you
+  // could buy it forever — see buyLegacy.
   const LEGACY_NODES = [
-    { id: 'vitality',  name: 'Vitality Legacy',     desc: '+8 starting Max HP',         baseCost: 6,  mult: 1.35 },
-    { id: 'power',     name: "Warrior's Legacy",    desc: '+1 starting Damage',         baseCost: 6,  mult: 1.35 },
-    { id: 'swiftness', name: 'Swift Legacy',        desc: '+1.5% Attack Speed',         baseCost: 8,  mult: 1.40 },
-    { id: 'fortitude', name: 'Hardened Legacy',     desc: '+1 Armor',                   baseCost: 10, mult: 1.45 },
-    { id: 'fortune',   name: "Fortune's Legacy",    desc: '+4% Gold Gain',              baseCost: 6,  mult: 1.30 },
-    { id: 'thrift',    name: "Prospector's Legacy", desc: 'Shop costs -2% (max -40%)',  baseCost: 10, mult: 1.50 },
-    { id: 'headstart', name: 'Head Start',          desc: '+5 starting Gold',           baseCost: 4,  mult: 1.30 },
-    { id: 'majorSlots', name: 'Major Loadout Slot', desc: '+1 Major Talisman Slot',     baseCost: 30, mult: 2.2 },
-    { id: 'minorSlots', name: 'Minor Loadout Slot', desc: '+1 Minor Talisman Slot',     baseCost: 18, mult: 1.9 },
+    { id: 'majorSlots', name: 'Major Loadout Slot', desc: '+1 Major Talisman Slot',   baseCost: 30, mult: 2.2, maxLevel: 1 },
+    { id: 'minorSlots', name: 'Minor Loadout Slot', desc: '+1 Minor Talisman Slot',   baseCost: 18, mult: 1.9, maxLevel: 2 },
+    { id: 'bagSlots',   name: 'Bag Inventory',      desc: '+1 Talisman Bag Capacity', baseCost: 15, mult: 1.8, maxLevel: 3 },
   ];
 
   // ---------------- Meta progression (persists across deaths/attempts) ----------------
@@ -907,6 +931,7 @@
   function buyLegacy(id) {
     if (phase !== 'gameover') return; // Legacy only spends between runs, on the "You Fell" screen
     const node = LEGACY_NODES.find(n => n.id === id);
+    if (node.maxLevel && legacyLevel(id) >= node.maxLevel) return;
     const cost = legacyCost(node);
     if (legacy.essence < cost) return;
     legacy.essence -= cost;
@@ -956,6 +981,8 @@
       },
       talismanBag: [],              // every talisman ever acquired this run, owned but not necessarily active
       equipped: { major: [], minor: [] }, // only these actually affect stats/combat — see isEquipped
+      weapons: { sword: { level: 1 }, spear: { level: 1 }, crossbow: { level: 1 } }, // owned from the start — see HERO_WEAPONS
+      equippedWeapon: 'sword', // drives atkRange (see computeStats) and the hero's own drawn weapon shape (see HERO_WEAPON_VISUALS)
       attackCount: 0, atkTimer: 0, cooldowns: {}, momentumStacks: 0, secondWindUsedThisWave: false,
       restBuffFightsRemaining: 0, // Wanderer's Inn "Rest" — see computeStats and waveCleared
       poisonStacks: 0, plaguedDmgRef: 0, // Plagued affix — see enemyAttack and simulationStep, reset each fight
@@ -967,6 +994,11 @@
     const base = tier === 'major' ? 3 : 5;
     return base + legacyLevel(tier === 'major' ? 'majorSlots' : 'minorSlots');
   }
+
+  // Total talismans the bag can hold at once, base + Legacy's Bag Inventory node — a separate
+  // cap from the equip slots above (you can own far more than you can ever equip).
+  function bagCapacity() { return 12 + legacyLevel('bagSlots'); }
+  function bagIsFull() { return hero.talismanBag.length >= bagCapacity(); }
 
   // Only equipped talismans do anything — owning one that's sitting in the bag has zero effect
   // until it's slotted in via the Loadout tab. This is the whole point of the loadout rework.
@@ -991,32 +1023,43 @@
     renderAll();
   }
 
+  // Same timing rule as talismans — switch freely between prep phases, locked in once a fight
+  // starts. All three weapons are owned from the start (see freshHero), so this is purely a
+  // selection, never a purchase.
+  function equipWeapon(id) {
+    if (phase !== 'prepping') return;
+    if (!HERO_WEAPONS[id] || hero.equippedWeapon === id) return;
+    hero.equippedWeapon = id;
+    renderAll();
+  }
+
   function computeStats() {
     const u = hero.upgrades;
     const has = id => isEquipped(id);
 
     // Core stats: flat, additive, capped at level 10 (see UPGRADES) — no multipliers, no
     // compounding. Any "wacky" scaling now lives entirely in talismans (below).
-    let dmg = 10 + 2 * u.damage + 1 * legacyLevel('power');
-    let atkSpeed = 1 + 0.1 * u.atkSpeed + 0.015 * legacyLevel('swiftness');
+    let dmg = 10 + 2 * u.damage;
+    let atkSpeed = 1 + 0.1 * u.atkSpeed;
     // Attack Speed Scaling: simple additive now too, capped at 5 levels × 10% = 50% max —
     // Fleet Reflexes is a pure unlock (grants nothing itself), matching Iron Resolve's shape.
     atkSpeed *= (1 + Math.min(0.5, 0.10 * u.adrenalFocus));
-    let maxHP = 100 + 15 * u.maxHP + 8 * legacyLevel('vitality');
-    let armor = 0 + 1 * u.armor + 1 * legacyLevel('fortitude');
+    let maxHP = 100 + 15 * u.maxHP;
+    let armor = 0 + 1 * u.armor;
     // Damage Reduction: simple additive now, capped at 5 levels × 10% = 50% max.
     let damageReductionPct = Math.min(0.5, 0.10 * u.kineticWard);
     // Gold Gain's Tier 1 is a flat bonus paid once per wave (see waveCleared); the % multiplier
     // is now purely Legacy + Golden Touch, since the shop-side Gold Gain % tier was removed.
     let goldPerRound = 10 * u.gold;
-    let goldMult = 1 + 0.04 * legacyLevel('fortune');
-    let shopCostMult = Math.max(0.6, 1 - 0.02 * legacyLevel('thrift'));
+    let goldMult = 1;
+    let shopCostMult = 1;
 
     // Crit Damage is now a fixed rule, not a stat — every crit simply deals double.
     const critDamage = 2.0;
-    // Melee by default (must be hex-adjacent to attack) — a real stat slot so a future
-    // talisman/upgrade/unique can extend it, same as every other combat stat here.
-    let atkRange = 1;
+    // Driven entirely by whichever weapon is equipped (see HERO_WEAPONS/equipWeapon) — the
+    // same ROLE_RANGE lookup enemies use for their own role, so Sword/Spear/Crossbow really
+    // just mean melee/reach/ranged for the hero too.
+    let atkRange = ROLE_RANGE[HERO_WEAPONS[hero.equippedWeapon].role];
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
 
@@ -1207,6 +1250,21 @@
     hero.attackCount++;
     heroLunge = 1;
 
+    if (HERO_WEAPON_VISUALS[hero.equippedWeapon].weaponShape === 'crossbow') {
+      // Same origin math as the Archer's own bolt (see enemyAttack) — offset forward and to
+      // the weapon side from the hero's hex center, rotated to face whichever target it's
+      // currently attacking, so the shot visibly comes from the crossbow, not the hero's hex.
+      const heroP = heroPixelPos();
+      const tp = enemyPos(target);
+      const facing = Math.atan2(tp.y - heroP.y, tp.x - heroP.x);
+      const visuals = HERO_WEAPON_VISUALS.crossbow;
+      const localX = HERO_RADIUS * (visuals.weaponBaseReach ?? 0.5);
+      const localY = HERO_RADIUS * WEAPON_SIDE;
+      const originX = heroP.x + localX * Math.cos(facing) - localY * Math.sin(facing);
+      const originY = heroP.y + localX * Math.sin(facing) + localY * Math.cos(facing);
+      spawnBolt(originX, originY, tp.x, tp.y);
+    }
+
     if (isEquipped('executioner') && target.hp / target.maxHp < 0.15) {
       target.hp = 0;
       target.flash = 1;
@@ -1236,10 +1294,23 @@
     if (target.hp <= 0) killEnemy(target);
   }
 
-  // A true whirlwind now that the hero can be approached from any direction — hits everyone
-  // within hex-distance 1, i.e. everyone actually adjacent, not "the front row."
+  // Not a whirlwind — a 3-hex swing: the hex the hero is currently attacking, plus whichever
+  // of that hex's neighbors also touch the hero's own hex (the two flanking it). With no
+  // current target there's nothing to swing at. If the hero isn't hex-adjacent to its target
+  // (e.g. wielding the Spear or Crossbow), no hex satisfies "touches both," so this naturally
+  // narrows to a single-target hit — no special-casing needed for that.
+  function cleaveHexes(target) {
+    const heroNeighborKeys = new Set(neighborsOf(heroHex.row, heroHex.idx).map(h => hexKey(h.row, h.idx)));
+    const flanking = neighborsOf(target.hex.row, target.hex.idx)
+      .filter(h => heroNeighborKeys.has(hexKey(h.row, h.idx)) && hexKey(h.row, h.idx) !== hexKey(heroHex.row, heroHex.idx));
+    return [target.hex, ...flanking];
+  }
+
   function triggerCleave() {
-    const targets = queue.filter(e => hexDistance(e.hex, heroHex) <= 1);
+    const target = currentHeroTarget();
+    if (!target) return;
+    const hitKeys = new Set(cleaveHexes(target).map(h => hexKey(h.row, h.idx)));
+    const targets = queue.filter(e => hitKeys.has(hexKey(e.hex.row, e.hex.idx)));
     if (!targets.length) return;
     const s = computeStats();
     const dmg = Math.max(1, Math.round(s.dmg * ABILITY_CFG.cleave.dmgMult));
@@ -1520,15 +1591,24 @@
     advanceFloorPosition();
   }
 
-  // Adds a talisman to the bag and auto-equips it into an open slot if one exists — the same
-  // convenience rule combat rewards use (see offerTalismanChoice's pick handler).
+  // Adds a talisman to the bag and auto-equips it into an open slot if one exists. If the bag
+  // is already at capacity (see bagCapacity), it converts to essence instead — same fallback
+  // an already-owned duplicate gets — rather than silently overflowing or blocking the pickup.
+  // Shared by every source of a brand-new talisman: combat rewards, Spellweaver purchases, and
+  // Shrine gifts.
   function grantTalisman(t) {
+    if (bagIsFull()) {
+      const reward = duplicateEssenceReward(t.tier);
+      legacy.essence += reward;
+      saveLegacy();
+      return { status: 'full', essence: reward };
+    }
     hero.talismanBag.push(t.id);
     if (hero.equipped[t.tier].length < slotCount(t.tier)) {
       hero.equipped[t.tier].push(t.id);
-      return ` (auto-equipped)`;
+      return { status: 'equipped' };
     }
-    return '';
+    return { status: 'bagged' };
   }
 
   // Only one purchase per visit — buying immediately ends the room, same as picking a card
@@ -1541,8 +1621,10 @@
     gold -= offer.price;
     offer.bought = true;
     const t = offer.talisman;
-    const equipNote = grantTalisman(t);
-    log(`Bought ${t.name} from the Spellweaver.${equipNote}`, 'wave');
+    const result = grantTalisman(t);
+    const note = result.status === 'equipped' ? ' (auto-equipped)'
+      : result.status === 'full' ? ` (bag full — converted to +${result.essence} essence)` : '';
+    log(`Bought ${t.name} from the Spellweaver.${note}`, 'wave');
     leaveRoom();
   }
 
@@ -1583,8 +1665,10 @@
         saveLegacy();
         giftText = `Already own ${gift.name} — converted to +${reward} essence.`;
       } else {
-        const equipNote = grantTalisman(gift);
-        giftText = `The shrine grants you ${gift.icon} ${gift.name}${equipNote}.`;
+        const result = grantTalisman(gift);
+        giftText = result.status === 'full'
+          ? `The shrine offers ${gift.name}, but your bag is full — converted to +${result.essence} essence instead.`
+          : `The shrine grants you ${gift.icon} ${gift.name}${result.status === 'equipped' ? ' (auto-equipped)' : ''}.`;
       }
     } else {
       const amt = 25 + Math.floor(Math.random() * 76); // 25-100 inclusive
@@ -1650,19 +1734,19 @@
           log(`Already own ${t.name} — converted to +${reward} essence.`, 'wave');
           saveLegacy();
         } else {
-          hero.talismanBag.push(t.id);
-          log(`Talisman acquired: ${t.name}.`, 'wave');
-          // Auto-equip into an open slot as a convenience default — swap it out later from
-          // the Loadout tab if you'd rather run something else.
-          if (hero.equipped[t.tier].length < slotCount(t.tier)) {
-            hero.equipped[t.tier].push(t.id);
-            log(`Auto-equipped ${t.name}.`, 'wave');
+          // grantTalisman is the shared acquisition path (also used by the Spellweaver and the
+          // Shrine) — it auto-equips into an open slot as a convenience default, or converts to
+          // essence instead if the bag is already full (see bagCapacity).
+          const result = grantTalisman(t);
+          if (result.status === 'full') {
+            log(`Bag full — ${t.name} converted to +${result.essence} essence instead.`, 'wave');
           } else {
-            log(`${t.name} added to your bag — equip it from the Loadout tab.`, 'wave');
-          }
-          if (t.unlocksStat) {
-            const tags = Array.isArray(t.unlocksStat) ? t.unlocksStat : [t.unlocksStat];
-            log(`Unlocked: ${tags.map(s => STAT_LABELS[s] || s).join(' & ')}!`, 'wave');
+            log(`Talisman acquired: ${t.name}.`, 'wave');
+            log(result.status === 'equipped' ? `Auto-equipped ${t.name}.` : `${t.name} added to your bag — equip it from the Loadout tab.`, 'wave');
+            if (t.unlocksStat) {
+              const tags = Array.isArray(t.unlocksStat) ? t.unlocksStat : [t.unlocksStat];
+              log(`Unlocked: ${tags.map(s => STAT_LABELS[s] || s).join(' & ')}!`, 'wave');
+            }
           }
         }
         document.getElementById('talismanModal').classList.add('hidden');
@@ -1938,6 +2022,7 @@
   // next"); only the copy inside the game-over modal is actually clickable, since Legacy only
   // spends between runs. Both render from the same node list so they never drift apart.
   function buildLegacyRow(n, interactive) {
+    const maxed = n.maxLevel && legacyLevel(n.id) >= n.maxLevel;
     const cost = legacyCost(n);
     const row = document.createElement('div');
     row.className = 'shopRow';
@@ -1945,15 +2030,15 @@
       <div class="shopInfo">
         <div class="shopName">${n.name}</div>
         <div class="shopDesc">${n.desc}</div>
-        <div class="shopLevel">Level ${legacyLevel(n.id)}</div>
+        <div class="shopLevel">Level ${legacyLevel(n.id)}${n.maxLevel ? ` / ${n.maxLevel}` : ''}</div>
       </div>
       <div class="shopBuy">
-        <div class="shopCost">${cost} essence</div>
+        <div class="shopCost">${maxed ? 'Maxed' : `${cost} essence`}</div>
       </div>`;
     const buyWrap = row.querySelector('.shopBuy');
     const btn = document.createElement('button');
     btn.textContent = 'Buy';
-    btn.disabled = !interactive || legacy.essence < cost;
+    btn.disabled = maxed || !interactive || legacy.essence < cost;
     if (interactive) btn.addEventListener('click', () => buyLegacy(n.id));
     buyWrap.appendChild(btn);
     return row;
@@ -1977,6 +2062,25 @@
   function renderLoadoutTab() {
     const el = document.getElementById('loadoutTabContent');
     el.innerHTML = '';
+
+    const weaponHeader = document.createElement('div');
+    weaponHeader.className = 'shopGroupLabel';
+    weaponHeader.textContent = 'Weapons (click to equip)';
+    el.appendChild(weaponHeader);
+    const weaponWrap = document.createElement('div');
+    weaponWrap.className = 'slotRow';
+    HERO_WEAPON_IDS.forEach(id => {
+      const w = HERO_WEAPONS[id];
+      const chip = document.createElement('span');
+      const active = hero.equippedWeapon === id;
+      chip.className = 'talismanChip slotChip' + (active ? ' equippedWeapon' : '');
+      chip.title = `${w.role} (range ${ROLE_RANGE[w.role]})`;
+      chip.textContent = `${w.icon} ${w.name} Lvl ${hero.weapons[id].level}${active ? ' (equipped)' : ''}`;
+      if (!active) chip.addEventListener('click', () => equipWeapon(id));
+      weaponWrap.appendChild(chip);
+    });
+    el.appendChild(weaponWrap);
+
     ['major', 'minor'].forEach(tier => {
       const header = document.createElement('div');
       header.className = 'shopGroupLabel';
@@ -2004,7 +2108,7 @@
 
     const bagHeader = document.createElement('div');
     bagHeader.className = 'shopGroupLabel';
-    bagHeader.textContent = 'Bag (click to equip)';
+    bagHeader.textContent = `Bag (click to equip) — ${hero.talismanBag.length}/${bagCapacity()}`;
     el.appendChild(bagHeader);
     const bagWrap = document.createElement('div');
     bagWrap.className = 'slotRow';
@@ -2530,7 +2634,7 @@
     const simExtrapolation = Math.min((performance.now() - lastSimStepTime) / 1000, SIM_STEP) * speed;
     const heroInterval = 1 / s.atkSpeed;
     const heroAtkProgress = Math.min(1, (hero.atkTimer + simExtrapolation) / heroInterval);
-    drawFacingUnit(heroP.x + heroShake + heroLungeOff.x, heroP.y + heroLungeOff.y, HERO_RADIUS, heroAngle, hero.hp > 0 ? '#4d8fdb' : '#555', false, heroAtkProgress, { weaponBaseReach: 0.6, weaponLunge: 0.5, weaponBlade: 0.55, weaponTail: 0.15, weaponGuard: 0.18 });
+    drawFacingUnit(heroP.x + heroShake + heroLungeOff.x, heroP.y + heroLungeOff.y, HERO_RADIUS, heroAngle, hero.hp > 0 ? '#4d8fdb' : '#555', false, heroAtkProgress, HERO_WEAPON_VISUALS[hero.equippedWeapon]);
     drawHealthBar(heroP.x, heroP.y - 55, 80, hero.hp / s.maxHP, '#5ac36a');
 
     // Enemies — each sits on its own hex; color reflects role (melee/reach/ranged) so it's
@@ -2715,13 +2819,19 @@
     resolveHeroMovement();
     resolveEnemyMovement();
 
-    if (s.regen > 0) hero.hp = Math.min(s.maxHP, hero.hp + s.regen * simDt);
+    // Both regen and the poison tick below are gated on queue.length too, not just
+    // phase==='combat' — phase stays 'combat' through the post-victory talisman-reward modal
+    // (see offerTalismanChoice, which only changes phase once the player actually picks), so
+    // without this the sim tick kept firing against an empty queue: Regen would keep healing
+    // the hero to full while they read the reward cards, and Plagued's poison could keep
+    // ticking (and even kill them) after the fight was already won.
+    if (s.regen > 0 && queue.length) hero.hp = Math.min(s.maxHP, hero.hp + s.regen * simDt);
 
     // Plagued affix — a stacking rot that ticks for the rest of the fight once you've been
     // hit at least once, scaled off whichever enemy last inflicted a stack (see enemyAttack)
     // so it stays threatening at any depth. Stacks reset at the start of every fight (see
     // startFight).
-    if (hero.poisonStacks > 0) {
+    if (hero.poisonStacks > 0 && queue.length) {
       const poisonDmg = hero.plaguedDmgRef * AFFIXES.plagued.poisonPerStackPct * hero.poisonStacks * simDt;
       hero.hp -= poisonDmg;
       checkHeroDeath();
@@ -2788,9 +2898,9 @@
   }
 
   // ---------------- Init / events ----------------
-  // Every attempt starts with a clean shop (levels + gold reset to zero, aside from any
-  // Head Start legacy) so early-run decisions stay interesting run after run. Legacy — bought
-  // with essence, which is earned on every wave clear — is what compounds.
+  // Every attempt starts with a clean shop (levels + gold reset to zero) so early-run decisions
+  // stay interesting run after run. Legacy — bought with essence, which is earned on every wave
+  // clear — is what compounds (now purely slot/bag capacity, see LEGACY_NODES).
   function restart() {
     hero = freshHero();
     wave = 0; // depth counter — the beginner encounter is depth 0; real path choices start at depth 1
@@ -2808,7 +2918,7 @@
     effects = [];
     const s = computeStats();
     hero.hp = s.maxHP;
-    gold = 5 * legacyLevel('headstart');
+    gold = 0;
     shopFrozenNext = false;
     document.getElementById('log').innerHTML = '';
     document.getElementById('gameOverModal').classList.add('hidden');
