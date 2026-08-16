@@ -15,12 +15,12 @@
   #app {
     max-width: 1600px;
     margin: 0 auto;
-    padding: 16px;
+    padding: 12px;
   }
   h1 {
-    font-size: 20px;
+    font-size: 18px;
     color: #eee;
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     letter-spacing: 0.5px;
   }
   #topbar {
@@ -29,8 +29,8 @@
     gap: 16px;
     background: #23232b;
     border-radius: 8px;
-    padding: 10px 14px;
-    margin-bottom: 12px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
     flex-wrap: wrap;
   }
   #topbar .stat { font-size: 14px; color: #bbb; }
@@ -58,12 +58,29 @@
   /* One unified window instead of a combat column + a separate sidebar column — Nate's explicit
      ask: "no more different windows... imagine it's all just one window now with different
      menus/sections within it." */
-  #gameWindow { padding: 14px; }
+  #gameWindow { padding: 10px; }
+  /* The canvas's own board (640x420 = ~1.52:1) used to size purely off available WIDTH, so
+     widening #app to fit a big monitor (see max-width above) also made the canvas taller in
+     lockstep, which is what was pushing the page past typical viewport heights. Width is now
+     capped at whichever is smaller: the full flex column, or the width the vertical budget
+     (~560px of topbar/bottom-row/etc. measured around it, see comment below) allows once
+     converted through the 640:420 ratio — aspect-ratio then derives height from THAT width, so
+     the box is always internally consistent and the canvas (height:100% instead of the old
+     width-only rule) never renders squished. A plain max-height clamp was tried first and
+     rejected — for a block box whose width is a definite value (not auto), browsers clamp height
+     alone without reflowing width back down, which stretched the hex board vertically. */
+  #canvasWrap {
+    width: min(100%, calc((100vh - 480px) * 32 / 21));
+    aspect-ratio: 640 / 420;
+    min-width: 320px;
+    margin: 0 auto;
+  }
   canvas#game {
     background: #23232b;
     display: block;
     border-radius: 8px;
     width: 100%;
+    height: 100%;
     box-shadow: 0 0 30px rgba(0,0,0,0.5);
   }
   /* Was: floating panels absolute-positioned on top of the canvas, sized to fit whatever margin
@@ -71,7 +88,7 @@
      (item 26, then item 27) — a margin that's "probably wide enough" isn't a real guarantee.
      Movement/Abilities/Terrain are now plain sections in .windowSidebar instead (see the HTML),
      so overlap is structurally impossible rather than a percentage to keep re-tuning. */
-  .overlaySubLabel { margin-top: 8px; padding-top: 6px; border-top: 1px solid #3a3a46; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
+  .overlaySubLabel { margin-top: 5px; padding-top: 4px; border-top: 1px solid #3a3a46; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
   .stanceBtnGroup { display: flex; gap: 6px; }
   .stanceBtnGroup .stanceBtn { flex: 1; }
   /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the rest
@@ -103,9 +120,9 @@
   #gameWindow { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
   .windowMain { flex: 3; min-width: 480px; }
   .windowSidebar { flex: 1; min-width: 300px; max-width: 380px; }
-  .windowSection h2 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
-  .windowSidebar .windowSection + .windowSection { border-top: 1px solid #2c2c35; padding-top: 10px; margin-top: 10px; }
-  .windowFullWidth { flex: 1 0 100%; border-top: 1px solid #2c2c35; padding-top: 10px; margin-top: 4px; }
+  .windowSection h2 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
+  .windowSidebar .windowSection + .windowSection { border-top: 1px solid #2c2c35; padding-top: 7px; margin-top: 7px; }
+  .windowFullWidth { flex: 1 0 100%; border-top: 1px solid #2c2c35; padding-top: 8px; margin-top: 4px; }
   /* Terrain Key, Shop, and Loadout & Inventory as three side-by-side boxes rather than tabbed —
      Nate wanted each visible at once instead of switching between Shop and Loadout. Terrain stays
      narrower since it's just a short legend; Shop/Loadout get more room for rows/chips. Wraps to
@@ -129,9 +146,9 @@
     color: #888;
     margin: 0 0 8px;
   }
-  .statRow { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; color: #ccc; }
+  .statRow { display: flex; justify-content: space-between; font-size: 13px; padding: 1px 0; color: #ccc; }
   .statRow span:last-child { color: #fff; font-weight: 600; }
-  #hpBarOuter { background: #3a1f1f; border-radius: 4px; height: 10px; margin: 6px 0 8px; overflow: hidden; }
+  #hpBarOuter { background: #3a1f1f; border-radius: 4px; height: 10px; margin: 4px 0 6px; overflow: hidden; }
   #hpBarInner { background: linear-gradient(90deg,#e0555a,#e88); height: 100%; width: 100%; transition: width 0.15s; }
 
   .talismanChip {
@@ -140,25 +157,25 @@
     border: 1px solid #5a3d78;
     color: #d9b8f5;
     border-radius: 6px;
-    padding: 3px 8px;
+    padding: 2px 8px;
     font-size: 12px;
     margin: 2px 3px 0 0;
     cursor: default;
   }
   #abilitiesPanel .empty { color: #666; font-size: 12px; }
-  .abilityRow { padding: 4px 0; }
-  .abilityName { font-size: 12px; color: #ccc; margin-bottom: 3px; }
+  .abilityRow { padding: 3px 0; }
+  .abilityName { font-size: 12px; color: #ccc; margin-bottom: 2px; }
   .abilityBarOuter { background: #1f2a3a; border-radius: 4px; height: 8px; overflow: hidden; }
   .abilityBarInner { background: linear-gradient(90deg,#4d8fdb,#7dd3fc); height: 100%; width: 0%; transition: width 0.1s linear; }
 
-  .setupAbilityRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; flex-wrap: wrap; }
+  .setupAbilityRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; flex-wrap: wrap; }
   .setupAbilityName { font-size: 12px; color: #ccc; }
   .setupAbilityControls { display: flex; align-items: center; gap: 6px; }
   .setupAbilityControls button { padding: 3px 8px; font-size: 11px; }
   .setupStatus, .setupHint { font-size: 11px; color: #888; }
 
   #terrainKeyPanel .empty { color: #666; font-size: 12px; }
-  .terrainKeyRow { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 12px; color: #ccc; cursor: default; }
+  .terrainKeyRow { display: flex; align-items: center; gap: 7px; padding: 3px 0; font-size: 12px; color: #ccc; cursor: default; }
   .terrainKeySwatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
   .terrainKeySwatch.swatch-chasm { background: radial-gradient(circle, #08080a, #302f38); border: 1px solid #000; }
   .terrainKeySwatch.swatch-fogpatch { background: rgba(225,228,232,0.55); border: 1px solid rgba(200,203,208,0.5); }
@@ -168,7 +185,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 0;
+    padding: 4px 0;
     border-bottom: 1px solid #2c2c35;
     gap: 8px;
   }
@@ -180,12 +197,12 @@
   .shopBuy { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
   .shopCost { font-size: 11px; color: #d8b84a; }
   .legacyNote { margin: 0 0 8px; color: #777; font-size: 11.5px; }
-  .shopGoldRow { font-size: 15px; color: #bbb; margin-bottom: 8px; }
+  .shopGoldRow { font-size: 15px; color: #bbb; margin-bottom: 6px; }
   .shopGoldRow b { color: #f0c14b; }
-  .shopControls { display: flex; gap: 6px; margin-bottom: 8px; }
-  .shopControls button { flex: 1; font-size: 11.5px; padding: 5px 6px; }
+  .shopControls { display: flex; gap: 6px; margin-bottom: 6px; }
+  .shopControls button { flex: 1; font-size: 11.5px; padding: 4px 6px; }
   #shopFreezeBtn.active { background: #2a3f5c; border-color: #3d6ecb; color: #a8c8f0; }
-  .shopGroupLabel { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b6b78; margin: 10px 0 2px; }
+  .shopGroupLabel { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b6b78; margin: 7px 0 2px; }
   .shopGroupLabel:first-child { margin-top: 0; }
   /* Two columns now that Shop has the full window width to work with (see .windowFullWidth) —
      cuts a 5-row upgrade list down to ~3 visual rows instead of 5, which is most of what was
@@ -195,11 +212,12 @@
   #shopPanel .shopGroupLabel { grid-column: 1 / -1; }
   .buyAllBtn { font-size: 10px; padding: 2px 7px; text-transform: none; letter-spacing: normal; }
 
-  .slotRow { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .slotRow { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
   .slotChip { cursor: pointer; }
   .slotChip.emptySlot { opacity: 0.4; border-style: dashed; cursor: default; color: #888; }
   .slotChip.equippedWeapon { border-color: #f0c14b; cursor: default; }
-  .prepHint { color: #d8b84a; font-size: 12px; margin: 0 0 10px; font-weight: 600; }
+  .prepHint { color: #d8b84a; font-size: 12px; margin: 0 0 6px; font-weight: 600; }
+  #encounterPreview.panel { padding: 8px 14px; }
   #encounterPreview.panel h2 { margin-bottom: 4px; }
   .tierCard.tier-brute { border-color: #c25b5b; }
   .tierCard.tier-pack { border-color: #5a9e5a; }
