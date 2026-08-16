@@ -57,6 +57,7 @@
 
   #main { display: flex; gap: 14px; align-items: flex-start; }
   #battleArea { flex: 1; min-width: 0; }
+  #canvasWrap { position: relative; }
   canvas#game {
     background: #23232b;
     display: block;
@@ -64,6 +65,29 @@
     width: 100%;
     box-shadow: 0 0 30px rgba(0,0,0,0.5);
   }
+  /* Floating HUD panels over the combat screen itself, not the sidebar — left side is hero-
+     related (movement, abilities), right side is environment-related (terrain). Percentage
+     positioning tracks the canvas's own aspect-ratio-preserved scaling, and the hex board only
+     ever occupies the horizontal-center band of the canvas (flat-top hex math leaves a wide
+     empty margin on both sides), so these never overlap the actual battlefield. */
+  .combatOverlay {
+    position: absolute;
+    background: rgba(20,20,26,0.85);
+    border: 1px solid #3a3a46;
+    border-radius: 8px;
+    padding: 8px 10px;
+    max-width: 145px;
+    z-index: 5;
+  }
+  .combatOverlay h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; }
+  #movementOverlay { left: 10px; bottom: 10px; }
+  #movementOverlay .stanceBtnGroup { display: flex; flex-direction: column; gap: 4px; }
+  #movementOverlay .stanceBtn { width: 100%; }
+  /* Positioned a bit below true vertical-center — the canvas-drawn STATUS readout (see
+     drawSideHUD) already lives in this same left margin starting around 26% down, so this
+     clears its worst case (two status lines) rather than sitting exactly at 50%. */
+  #abilitiesOverlay { left: 10px; top: 47%; }
+  #terrainOverlay { right: 10px; bottom: 10px; }
   /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the
      sidebar stays visible and clickable while choosing, instead of a full-screen modal blocking
      it. min-height roughly matches the canvas's own rendered footprint so the log below it
@@ -291,9 +315,6 @@
     <button class="speedBtn active" data-speed="1">1x</button>
     <button class="speedBtn" data-speed="2">2x</button>
     <button class="speedBtn" data-speed="3">3x</button>
-    <span class="stat">Stance</span>
-    <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
-    <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
     <label class="chk"><input type="checkbox" id="autoStartChk"> Auto-start fights</label>
     <button id="startWaveBtn" class="primary">Start Fight</button>
     <button id="restartBtn">New Attempt</button>
@@ -304,7 +325,27 @@
 
   <div id="main">
     <div id="battleArea">
-      <canvas id="game" width="640" height="420"></canvas>
+      <div id="canvasWrap">
+        <canvas id="game" width="640" height="420"></canvas>
+        <!-- Left side of the combat screen is hero-related (movement, active abilities); right
+             side is environment-related (terrain key) — mirrors drawSideHUD's own canvas-drawn
+             STATUS (left) / AFFIXES (right) split just below the topbar's stats. -->
+        <div id="movementOverlay" class="combatOverlay">
+          <h3>Movement</h3>
+          <div class="stanceBtnGroup">
+            <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
+            <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
+          </div>
+        </div>
+        <div id="abilitiesOverlay" class="combatOverlay">
+          <h3>Abilities</h3>
+          <div id="abilitiesPanel"><span class="empty">No abilities yet — some talismans grant one.</span></div>
+        </div>
+        <div id="terrainOverlay" class="combatOverlay">
+          <h3>Terrain</h3>
+          <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
+        </div>
+      </div>
       <div id="pathPanel" class="panel" style="display:none">
         <h2>Choose Your Next Encounter</h2>
         <p class="sub" id="pathModalSub">Pick a fight based on what you can handle — and what you want as a reward.</p>
@@ -333,16 +374,8 @@
         <div id="talismansPanel"><span class="empty">Nothing equipped yet.</span></div>
       </div>
       <div class="panel">
-        <h2>Abilities</h2>
-        <div id="abilitiesPanel"><span class="empty">No abilities yet — some major talismans grant one.</span></div>
-      </div>
-      <div class="panel">
         <h2>Setup Abilities</h2>
         <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
-      </div>
-      <div class="panel">
-        <h2>Terrain</h2>
-        <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
       </div>
       <div class="panel" id="prepPanel" style="display:none">
         <p class="prepHint">Adjust your build and shop before starting the fight!</p>
@@ -617,7 +650,7 @@
     { id: 'executioner', tier: 'major', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.' },
     { id: 'goldentouch', tier: 'major', icon: '\u{1F4B0}', name: 'Golden Touch',  desc: '+30% gold earned, from kills and from combat rewards alike.' },
     { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage.` },
-    { id: 'electricshock', tier: 'major', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack arcs to every enemy adjacent to your target for bonus damage.' },
+    { id: 'electricshock', tier: 'major', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack jolts your target for bonus damage, arcing to every enemy adjacent to it too.' },
     { id: 'afterimage', tier: 'major', type: 'ability', icon: '\u{1F465}', name: 'After Image', desc: `Every ${ABILITY_CFG.afterimage.cooldown}s, swap places with a decoy sent to the safest hex 4 tiles out. The decoy has 20% of your max HP and draws enemy attacks in your place.` },
     { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 2 hexes, stunning enemies for 1s/0.5s the closer they are.` },
     { id: 'icewall',     tier: 'major', type: 'setup', icon: '\u{2744}\u{FE0F}', name: 'Ice Wall', desc: 'Before the fight, place up to 3 connected hexes of impassable ice — enemies (and you) must path around them for the whole fight.' },
@@ -1577,8 +1610,22 @@
     // valid here even if the main hit just killed it — killEnemy hasn't run yet.
     if (isEquipped('electricshock') && hero.attackCount % 4 === 0) {
       const shockDmg = Math.max(1, Math.round(s.dmg * 0.5));
+      // The main target always takes the shock bonus too, not just its neighbors — previously a
+      // solo target (nothing adjacent to chain into) meant this talisman silently did nothing at
+      // all on its trigger tick, which read as broken/inconsistent for something that's supposed
+      // to fire reliably every 4th hit. Arcs from the hero rather than "from itself," so there's
+      // always a visible jolt even with zero chain targets.
+      const heroP = heroPixelPos();
+      spawnShock(heroP.x, heroP.y, p.x, p.y);
+      target.hp -= shockDmg;
+      spawnDamageNumber(p.x, p.y - p.r - 30, String(shockDmg), '#7ec8ff');
+      logDamageDealt('Electric Shock', shockDmg);
+      applyLifesteal(shockDmg);
+      applyAffixReactions(target, shockDmg);
+      log(`Electric Shock jolts your target for ${shockDmg}!`, 'crit');
+
       const chainTargets = queue.filter(e => e !== target && hexDistance(e.hex, target.hex) <= 1);
-      if (chainTargets.length) log(`Electric Shock arcs to ${chainTargets.length} more enem${chainTargets.length > 1 ? 'ies' : 'y'}!`, 'crit');
+      if (chainTargets.length) log(`Electric Shock also arcs to ${chainTargets.length} more enem${chainTargets.length > 1 ? 'ies' : 'y'}!`, 'crit');
       chainTargets.forEach(e => {
         e.hp -= shockDmg;
         e.flash = 1;
@@ -2250,7 +2297,9 @@
     smokeZones = [];
     heroTargetId = null;
     combatStats = { dealt: {}, taken: {} };
-    heroStance = 'advance';
+    // heroStance deliberately NOT reset here — Nate's explicit ask: Hold should stay selected
+    // fight after fight until he manually switches back to Advance, not silently revert the
+    // instant a new fight starts. It only resets on a full New Attempt (see restart()).
     phase = 'combat';
     log(`Encounter begins: ${chosenEncounter.desc}`, 'wave');
     renderAll();
@@ -2480,9 +2529,16 @@
     // segment that only LOOKS safe in isolation could still complete a seal a Chasm started.
     // Reject rather than silently reshape the player's chosen selection — pendingWallHexes stays
     // intact so they can just pick a different shape instead of losing their work.
+    // Checked against every hex on the board, not just current enemy positions — a wall that
+    // seals off some currently-empty hex (nobody standing there yet, but reachable later via
+    // click-relocate or a future spawn) is just as much a softlock risk as sealing off a live
+    // enemy, so it's rejected here too (see generateTerrainForEncounter's matching fix).
     const chasmBlocking = terrainFeatures.filter(f => TERRAIN_TYPES[f.type].blocksMovement).map(f => f.hex);
-    if (!keepsBoardConnected(heroHex, queue.map(e => e.hex), [...chasmBlocking, ...pendingWallHexes])) {
-      log('That wall would seal an enemy off completely — try a different shape or spot.', 'crit');
+    const candidateBlocked = [...chasmBlocking, ...pendingWallHexes];
+    const blockedSet = new Set(candidateBlocked.map(h => hexKey(h.row, h.idx)));
+    const reachTargets = allHexes().filter(h => !blockedSet.has(hexKey(h.row, h.idx)));
+    if (!keepsBoardConnected(heroHex, reachTargets, candidateBlocked)) {
+      log('That wall would seal off part of the board completely — try a different shape or spot.', 'crit');
       return;
     }
     iceWallHexes = pendingWallHexes.slice();
@@ -2775,10 +2831,13 @@
   // exactly the point of this being here instead of a popup blocking everything.
   function renderPathModal() {
     const panel = document.getElementById('pathPanel');
-    const canvas = document.getElementById('game');
-    if (phase !== 'choosing') { panel.style.display = 'none'; canvas.style.display = ''; return; }
+    // Toggle the whole canvas+overlay wrapper as one unit — otherwise the movement/abilities/
+    // terrain HUD panels would stay visible floating over the path-choice cards once the canvas
+    // itself is hidden.
+    const canvasWrap = document.getElementById('canvasWrap');
+    if (phase !== 'choosing') { panel.style.display = 'none'; canvasWrap.style.display = ''; return; }
     panel.style.display = '';
-    canvas.style.display = 'none';
+    canvasWrap.style.display = 'none';
     document.getElementById('pathModalSub').textContent =
       `Floor ${floor} — Encounter ${floorPosition} of ${FLOOR_LENGTH}. Pick a fight based on what you can handle — and what you want as a reward.`;
     const el = document.getElementById('pathCards');
@@ -3760,16 +3819,23 @@
     const pct = 0.20 + Math.random() * 0.30;
     const targetCount = Math.min(eligible.length, Math.round(allHexes().length * pct));
     const chosen = eligible.slice(0, targetCount);
-    const enemyHexes = queue.map(e => e.hex);
 
     const features = [];
     const chasmSoFar = [];
     chosen.forEach(hex => {
       const typeId = TERRAIN_TYPE_IDS[Math.floor(Math.random() * TERRAIN_TYPE_IDS.length)];
       if (TERRAIN_TYPES[typeId].blocksMovement) {
-        // Only commit as a blocker if every enemy stays reachable from the hero — otherwise
-        // fall back to a non-blocking type so the promised density isn't quietly reduced.
-        if (keepsBoardConnected(heroHex, enemyHexes, [...chasmSoFar, hex])) {
+        // Checked against every OTHER hex on the board, not just current enemy positions — a
+        // candidate Chasm hex that would seal off some currently-empty hex into its own isolated
+        // pocket is rejected here too, even though nothing occupies that pocket yet. Nate hit
+        // exactly this: an empty hex got fully ringed by Chasm, nothing caught it at generation
+        // time (the old check only verified enemies stayed reachable), and he was later able to
+        // click-relocate the hero straight into the sealed pocket during prep — an unwinnable
+        // softlock once combat started, since neither side could ever reach the other.
+        const candidateBlocked = [...chasmSoFar, hex];
+        const blockedSet = new Set(candidateBlocked.map(h => hexKey(h.row, h.idx)));
+        const reachTargets = allHexes().filter(h => !blockedSet.has(hexKey(h.row, h.idx)));
+        if (keepsBoardConnected(heroHex, reachTargets, candidateBlocked)) {
           chasmSoFar.push(hex);
           features.push({ hex, type: typeId });
         } else {
@@ -3987,6 +4053,14 @@
     if (placingSetupId) { handleSetupPlacementClick(hex); return; }
     if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return; // enemies block it
     if (terrainBlockingHexes().some(h => h.row === hex.row && h.idx === hex.idx)) return; // e.g. a random Chasm blocks it too
+    // Defensive backstop against the softlock class Nate reported (a fully Chasm-ringed empty
+    // hex, generated before this fix existed, that the hero could still be relocated into) — even
+    // though generation and Ice Wall placement now both reject creating such a pocket in the
+    // first place, this catches it regardless of source, including any old-save edge case.
+    if (queue.length && !keepsBoardConnected(hex, queue.map(e => e.hex), terrainBlockingHexes())) {
+      log("You can't retreat into a hex that's completely cut off from the enemy.", 'crit');
+      return;
+    }
     heroHex = hex;
     renderAll();
   }
@@ -4125,6 +4199,7 @@
     floorPosition = 1;
     heroHex = { ...HERO_SPAWN_HEX };
     heroTargetId = null;
+    heroStance = 'advance'; // a fresh run starts from the default stance; it persists fight-to-fight after this
     phase = 'starterPick';
     dmgNumbers = [];
     effects = [];
@@ -4137,7 +4212,7 @@
     document.getElementById('talismanModal').classList.add('hidden');
     document.getElementById('combatSummaryModal').classList.add('hidden');
     document.getElementById('pathPanel').style.display = 'none';
-    document.getElementById('game').style.display = '';
+    document.getElementById('canvasWrap').style.display = '';
     document.getElementById('roomModal').classList.add('hidden');
     log('A new attempt begins.', 'wave');
     // Every run opens with a choice of 1 of 3 starter majors (auto-equipped immediately since
