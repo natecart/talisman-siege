@@ -80,6 +80,11 @@
     z-index: 5;
   }
   .combatOverlay h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; }
+  /* Sits between the active-ability cooldown rows and the pre-fight Setup Abilities rows (Ice
+     Wall/Bear Trap placement) once both share this one overlay box (Nate's explicit ask — Setup
+     Abilities used to live in the sidebar, separated from everything else hero-related). */
+  .combatOverlay .overlaySubLabel { margin-top: 8px; padding-top: 6px; border-top: 1px solid #3a3a46; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
+  #abilitiesOverlay { max-width: 175px; }
   #movementOverlay { left: 10px; bottom: 10px; }
   #movementOverlay .stanceBtnGroup { display: flex; flex-direction: column; gap: 4px; }
   #movementOverlay .stanceBtn { width: 100%; }
@@ -292,8 +297,13 @@
   .dmgSummaryRow { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: #ccc; padding: 3px 0; border-bottom: 1px solid #2c2c35; }
   .dmgSummaryRow:last-child { border-bottom: none; }
   .dmgSummaryRow span:last-child { color: #fff; font-weight: 600; }
-  #combatSummaryModal .dmgSummaryCol:first-child .dmgSummaryRow span:last-child { color: #7dd3fc; }
-  #combatSummaryModal .dmgSummaryCol:last-child .dmgSummaryRow span:last-child { color: #e88; }
+  /* Uses nth-child rather than first/last-child — this used to be just Dealt/Taken (two
+     columns, so first/last worked), but adding a third Healing column would have silently
+     shifted "last" onto the wrong one otherwise. Unprefixed so both the victory summary and the
+     game-over modal share the same coloring (the latter never had it before). */
+  .dmgSummaryCols .dmgSummaryCol:nth-child(1) .dmgSummaryRow span:last-child { color: #7dd3fc; }
+  .dmgSummaryCols .dmgSummaryCol:nth-child(2) .dmgSummaryRow span:last-child { color: #e88; }
+  .dmgSummaryCols .dmgSummaryCol:nth-child(3) .dmgSummaryRow span:last-child { color: #7bd88f; }
 
   @media (max-width: 760px) {
     #main { flex-direction: column; }
@@ -340,6 +350,8 @@
         <div id="abilitiesOverlay" class="combatOverlay">
           <h3>Abilities</h3>
           <div id="abilitiesPanel"><span class="empty">No abilities yet — some talismans grant one.</span></div>
+          <div class="overlaySubLabel">Setup</div>
+          <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
         </div>
         <div id="terrainOverlay" class="combatOverlay">
           <h3>Terrain</h3>
@@ -373,10 +385,6 @@
         <h2>Equipped</h2>
         <div id="talismansPanel"><span class="empty">Nothing equipped yet.</span></div>
       </div>
-      <div class="panel">
-        <h2>Setup Abilities</h2>
-        <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
-      </div>
       <div class="panel" id="prepPanel" style="display:none">
         <p class="prepHint">Adjust your build and shop before starting the fight!</p>
         <div class="tabBar">
@@ -392,11 +400,6 @@
           </div>
           <div id="shopPanel"></div>
         </div>
-      </div>
-      <div class="panel">
-        <h2>Legacy</h2>
-        <p class="legacyNote">Bought with Essence between runs — spend it on the "You Fell" screen. Survives every new attempt; only "Reset All Progress" can erase it.</p>
-        <div id="legacyPanel"></div>
       </div>
     </div>
   </div>
@@ -422,6 +425,10 @@
       <div class="dmgSummaryCol">
         <h3>Damage Taken</h3>
         <div id="dmgTakenList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Healing</h3>
+        <div id="dmgHealedList" class="dmgSummaryList"></div>
       </div>
     </div>
     <button class="primary" id="combatSummaryContinueBtn">Continue</button>
@@ -450,6 +457,10 @@
       <div class="dmgSummaryCol">
         <h3>Damage Taken</h3>
         <div id="gameOverDmgTakenList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Healing</h3>
+        <div id="gameOverDmgHealedList" class="dmgSummaryList"></div>
       </div>
     </div>
     <div class="modalLegacySection">
@@ -1155,7 +1166,7 @@
   // Per-fight damage-source tallies, shown in the post-combat summary (see showCombatSummary/
   // gameOver) — reset to empty at the start of every fight so the screen only ever reflects the
   // fight that just ended, not a running lifetime total.
-  let combatStats = { dealt: {}, taken: {} };
+  let combatStats = { dealt: {}, taken: {}, healed: {} };
   function logDamageDealt(source, amount) {
     if (amount <= 0) return;
     combatStats.dealt[source] = (combatStats.dealt[source] || 0) + amount;
@@ -1163,6 +1174,10 @@
   function logDamageTaken(source, amount) {
     if (amount <= 0) return;
     combatStats.taken[source] = (combatStats.taken[source] || 0) + amount;
+  }
+  function logHealing(source, amount) {
+    if (amount <= 0) return;
+    combatStats.healed[source] = (combatStats.healed[source] || 0) + amount;
   }
 
   // Setup abilities (Ice Wall / Bear Trap) — placed during PREP, not on a combat cooldown, so
@@ -1350,7 +1365,7 @@
   // path needing its own hardcoded "if (has('bloodthirst'))" check.
   function applyLifesteal(dmg) {
     const pct = computeStats().lifestealPct;
-    if (pct > 0) healHero(dmg * pct);
+    if (pct > 0) logHealing('Lifesteal', healHero(dmg * pct));
   }
 
   // Display label for the damage summary's "taken" side — named per enemy type (typeId is null
@@ -1485,9 +1500,14 @@
     effects.push({ type: 'shockwave', x, y, life: 1 });
   }
 
+  // Returns the ACTUAL amount gained (post-clamp to maxHP), not the raw input — callers that log
+  // it to the healing summary (see logHealing) want what really landed, not what would have if
+  // the hero weren't already near full HP.
   function healHero(amount) {
     const s = computeStats();
+    const before = hero.hp;
     hero.hp = Math.min(s.maxHP, hero.hp + amount);
+    return hero.hp - before;
   }
 
   // ---------------- Combat ----------------
@@ -1504,10 +1524,12 @@
 
   // Sticky targeting: the hero keeps attacking the same enemy across multiple hits rather than
   // re-rolling "closest" every attack (avoids the target visually flickering between two
-  // equally-close enemies). It only re-picks when it has no target or the current one died —
-  // see killEnemy. Ties at the minimum hex-distance break on lowest id (whichever enemy has
-  // been on the field longest). A future ability that repositions the hero MUST null
-  // heroTargetId after moving it, so this naturally re-picks from the new position.
+  // equally-close enemies). Re-picks when it has no target, the current one died (see killEnemy),
+  // or — while still closing distance, not yet actually fighting it — a different enemy has
+  // become clearly closer (see maybeRetargetHero). Ties at the minimum hex-distance break on
+  // lowest id (whichever enemy has been on the field longest). A future ability that repositions
+  // the hero MUST null heroTargetId after moving it, so this naturally re-picks from the new
+  // position.
   function pickHeroTarget() {
     let best = null, bestDist = Infinity;
     queue.forEach(e => {
@@ -1519,6 +1541,30 @@
   function currentHeroTarget() {
     if (heroTargetId == null) return null;
     return queue.find(e => e.id === heroTargetId) || null;
+  }
+
+  // Re-evaluates the sticky target ONLY while the hero hasn't actually caught up to it yet (out
+  // of range, or in range but LOS-blocked) — once already fighting it, this never runs, so there's
+  // still no mid-swing flicker. Nate's reported bug: the hero locked onto the closest enemy, but
+  // that enemy then had to detour around an Ice Wall and drifted genuinely farther away tick by
+  // tick, while a different enemy stayed on a short, clear path — the hero just kept chasing the
+  // now-farther original target forever, since sticky targeting had no mechanism to notice. A
+  // margin (not "any closer enemy at all") avoids swapping over normal 1-hex jitter between two
+  // enemies converging at a similar pace — it only fires once the gap is large enough to be a
+  // real, sustained difference, like an actual wall detour would produce.
+  const RETARGET_MARGIN = 2;
+  function maybeRetargetHero() {
+    const target = currentHeroTarget();
+    if (!target) { pickHeroTarget(); return; }
+    const s = computeStats();
+    if (hexDistance(heroHex, target.hex) <= s.atkRange && hasLineOfSight(heroHex, target.hex)) return; // already engaged — stay locked on
+    const targetDist = hexDistance(target.hex, heroHex);
+    let best = target, bestDist = targetDist;
+    queue.forEach(e => {
+      const d = hexDistance(e.hex, heroHex);
+      if (d < bestDist || (d === bestDist && e.id < best.id)) { bestDist = d; best = e; }
+    });
+    if (best.id !== target.id && bestDist + RETARGET_MARGIN <= targetDist) heroTargetId = best.id;
   }
 
   function heroAttack() {
@@ -1890,8 +1936,10 @@
     if (hero.hp > 0) return;
     const s = computeStats();
     if (isEquipped('secondwind') && !hero.secondWindUsedThisWave) {
+      const before = hero.hp;
       hero.hp = Math.round(s.maxHP * 0.15);
       hero.secondWindUsedThisWave = true;
+      logHealing('Second Wind', hero.hp - before);
       log(`Second Wind saves you, refilling to ${hero.hp} HP!`, 'crit');
     } else {
       hero.hp = 0;
@@ -1902,7 +1950,7 @@
   // Fills two containers with the per-fight damage tallies from combatStats (see logDamageDealt/
   // logDamageTaken), sorted highest-first — shared by the victory summary modal and the game-over
   // modal so both read from the exact same accumulated data.
-  function renderDamageSummaryInto(dealtEl, takenEl) {
+  function renderDamageSummaryInto(dealtEl, takenEl, healedEl) {
     const renderList = (el, obj) => {
       const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
       el.innerHTML = entries.length
@@ -1911,6 +1959,7 @@
     };
     renderList(dealtEl, combatStats.dealt);
     renderList(takenEl, combatStats.taken);
+    renderList(healedEl, combatStats.healed);
   }
 
   // Blocking recap shown the instant a fight is won, before any reward/advance flow runs —
@@ -1918,7 +1967,11 @@
   // acknowledges what just happened.
   function showCombatSummary(title, onContinue) {
     document.getElementById('combatSummaryTitle').textContent = title;
-    renderDamageSummaryInto(document.getElementById('dmgDealtList'), document.getElementById('dmgTakenList'));
+    renderDamageSummaryInto(
+      document.getElementById('dmgDealtList'),
+      document.getElementById('dmgTakenList'),
+      document.getElementById('dmgHealedList'),
+    );
     document.getElementById('combatSummaryModal').classList.remove('hidden');
     document.getElementById('combatSummaryContinueBtn').onclick = () => {
       document.getElementById('combatSummaryModal').classList.add('hidden');
@@ -2008,7 +2061,11 @@
     log(`You fell at depth ${wave}.`, 'death');
     document.getElementById('finalWave').textContent = `Depth ${wave}`;
     document.getElementById('bestLine').textContent = `Best depth: ${bestWave}`;
-    renderDamageSummaryInto(document.getElementById('gameOverDmgDealtList'), document.getElementById('gameOverDmgTakenList'));
+    renderDamageSummaryInto(
+      document.getElementById('gameOverDmgDealtList'),
+      document.getElementById('gameOverDmgTakenList'),
+      document.getElementById('gameOverDmgHealedList'),
+    );
     document.getElementById('gameOverModal').classList.remove('hidden');
     renderAll();
   }
@@ -2296,7 +2353,7 @@
                           // deficit) over from the last one
     smokeZones = [];
     heroTargetId = null;
-    combatStats = { dealt: {}, taken: {} };
+    combatStats = { dealt: {}, taken: {}, healed: {} };
     // heroStance deliberately NOT reset here — Nate's explicit ask: Hold should stay selected
     // fight after fight until he manually switches back to Advance, not silently revert the
     // instant a new fight starts. It only resets on a full New Attempt (see restart()).
@@ -2695,9 +2752,9 @@
     });
   }
 
-  // The sidebar copy is always visible but read-only (a reference for "what do I have / what's
-  // next"); only the copy inside the game-over modal is actually clickable, since Legacy only
-  // spends between runs. Both render from the same node list so they never drift apart.
+  // `interactive` is only ever true for the game-over modal's copy (see renderLegacyPanel) —
+  // Legacy only spends between runs (see buyLegacy's own phase guard), so there's nowhere else
+  // this needs to be clickable.
   function buildLegacyRow(n, interactive) {
     const maxed = n.maxLevel && legacyLevel(n.id) >= n.maxLevel;
     const cost = legacyCost(n);
@@ -2721,13 +2778,14 @@
     return row;
   }
 
+  // Legacy is only ever actionable on the "You Fell" screen (see buyLegacy's own phase guard) —
+  // it used to also render a read-only preview copy in the sidebar during an active run, but
+  // Nate asked to drop that: it's visual clutter for something you can't touch until between
+  // runs anyway, so the modal copy is now the only one that exists.
   function renderLegacyPanel() {
-    const sidebarEl = document.getElementById('legacyPanel');
     const modalEl = document.getElementById('legacyPanelGameOver');
-    sidebarEl.innerHTML = '';
     modalEl.innerHTML = '';
     LEGACY_NODES.forEach(n => {
-      sidebarEl.appendChild(buildLegacyRow(n, false));
       modalEl.appendChild(buildLegacyRow(n, phase === 'gameover'));
     });
     document.getElementById('essenceAmtModal').textContent = legacy.essence;
@@ -2827,8 +2885,8 @@
   }
 
   // Lives inline in battleArea (swapping with the canvas) rather than a full-screen modal, so
-  // the sidebar — Hero stats, Equipped, Legacy — stays visible and clickable while choosing:
-  // exactly the point of this being here instead of a popup blocking everything.
+  // the sidebar — Hero stats, Equipped — stays visible and clickable while choosing: exactly
+  // the point of this being here instead of a popup blocking everything.
   function renderPathModal() {
     const panel = document.getElementById('pathPanel');
     // Toggle the whole canvas+overlay wrapper as one unit — otherwise the movement/abilities/
@@ -4071,7 +4129,7 @@
     const simDt = SIM_STEP * speed;
     const s = computeStats();
 
-    if (!currentHeroTarget()) pickHeroTarget();
+    maybeRetargetHero();
     resolveHeroMovement(simDt);
     resolveEnemyMovement(simDt);
 
@@ -4089,7 +4147,7 @@
     // without this the sim tick kept firing against an empty queue: Regen would keep healing
     // the hero to full while they read the reward cards, and Plagued's poison could keep
     // ticking (and even kill them) after the fight was already won.
-    if (s.regen > 0 && queue.length) hero.hp = Math.min(s.maxHP, hero.hp + s.regen * simDt);
+    if (s.regen > 0 && queue.length) logHealing('Regen', healHero(s.regen * simDt));
 
     // Smoke Screen zones tick down in real sim-time and expire on their own once their
     // SMOKE_DURATION runs out — same queue.length gate as regen/poison above so a zone doesn't
