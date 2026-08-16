@@ -94,22 +94,28 @@
   #log div.entry.death { color: #e06666; font-weight: 600; }
 
   /* Two columns inside the one shared #gameWindow surface — the combat zone on the left, and
-     everything that used to be the sidebar (Hero/Equipped/Loadout+Shop) stacked in a column on
-     the right, so a normal wide monitor is used horizontally instead of forcing a long vertical
-     scroll to reach them. No separate panel background per section, just divider lines, so it
-     still reads as sections of one window rather than stacked boxes. */
+     the hero's live-combat status (Hero/Movement/Abilities) stacked in a column on the right, so
+     a normal wide monitor is used horizontally instead of forcing a long vertical scroll to reach
+     them. No separate panel background per section, just divider lines, so it still reads as
+     sections of one window rather than stacked boxes. Terrain/Shop/Loadout live in their own full
+     width row below (see .windowBottomRow) since they're reference/build info rather than
+     moment-to-moment combat state. */
   #gameWindow { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
   .windowMain { flex: 3; min-width: 480px; }
   .windowSidebar { flex: 1; min-width: 300px; max-width: 380px; }
   .windowSection h2 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
   .windowSidebar .windowSection + .windowSection { border-top: 1px solid #2c2c35; padding-top: 10px; margin-top: 10px; }
-  /* Loadout/Shop gets its own full-width row below the canvas+sidebar row instead of squeezing
-     into the narrow sidebar column — it's the tallest section (shop rows + talisman bag), and
-     the extra width lets .prepColumns lay two panes side by side instead of stacking, which is
-     what was pushing the page taller than the viewport (Nate: "I want to see all the important
-     menus without having to scroll down"). flex-basis 100% forces it onto its own line in the
-     wrapping flex row above. */
   .windowFullWidth { flex: 1 0 100%; border-top: 1px solid #2c2c35; padding-top: 10px; margin-top: 4px; }
+  /* Terrain Key, Shop, and Loadout & Inventory as three side-by-side boxes rather than tabbed —
+     Nate wanted each visible at once instead of switching between Shop and Loadout. Terrain stays
+     narrower since it's just a short legend; Shop/Loadout get more room for rows/chips. Wraps to
+     stacked boxes on narrow viewports via flex-wrap + per-box min-width, same pattern as the
+     sidebar's own responsive behavior below. */
+  .windowBottomRow { display: flex; gap: 20px; flex-wrap: wrap; }
+  .bottomBox { min-width: 220px; }
+  .bottomBox.terrainBox { flex: 1; }
+  .bottomBox.shopBox { flex: 1.4; }
+  .bottomBox.loadoutBox { flex: 1.6; }
   @media (max-width: 900px) { .windowMain { min-width: 100%; } .windowSidebar { max-width: 100%; } }
   .panel {
     background: #23232b;
@@ -139,7 +145,7 @@
     margin: 2px 3px 0 0;
     cursor: default;
   }
-  #talismansPanel .empty, #abilitiesPanel .empty { color: #666; font-size: 12px; }
+  #abilitiesPanel .empty { color: #666; font-size: 12px; }
   .abilityRow { padding: 4px 0; }
   .abilityName { font-size: 12px; color: #ccc; margin-bottom: 3px; }
   .abilityBarOuter { background: #1f2a3a; border-radius: 4px; height: 8px; overflow: hidden; }
@@ -193,18 +199,6 @@
   .slotChip { cursor: pointer; }
   .slotChip.emptySlot { opacity: 0.4; border-style: dashed; cursor: default; color: #888; }
   .slotChip.equippedWeapon { border-color: #f0c14b; cursor: default; }
-  .tabBar { display: flex; gap: 6px; margin-bottom: 10px; }
-  .tabBtn {
-    flex: 1;
-    padding: 9px 8px;
-    font-size: 13px;
-    font-weight: 700;
-    border-radius: 6px;
-    border: 2px solid #46465a;
-    background: #2b2b35;
-    color: #aaa;
-  }
-  .tabBtn.active { background: #3d6ecb; border-color: #7fb0f0; color: #fff; box-shadow: 0 0 0 2px rgba(125,176,240,0.35); }
   .prepHint { color: #d8b84a; font-size: 12px; margin: 0 0 10px; font-weight: 600; }
   #encounterPreview.panel h2 { margin-bottom: 4px; }
   .tierCard.tier-brute { border-color: #c25b5b; }
@@ -376,34 +370,32 @@
         <div class="overlaySubLabel">Setup Abilities</div>
         <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
       </div>
-      <div id="equippedSection" class="windowSection">
-        <h2>Equipped</h2>
-        <div id="talismansPanel"><span class="empty">Nothing equipped yet.</span></div>
-      </div>
-      <div id="terrainSection" class="windowSection">
+    </div>
+
+    <!-- Terrain Key, Shop, and Loadout & Inventory as three side-by-side boxes below the
+         canvas+sidebar row — reference/build info rather than moment-to-moment combat state, so it
+         lives apart from Hero/Movement/Abilities above. Terrain stays visible at all times (it
+         matters mid-combat too); Shop and Loadout only show up during prep phases (see
+         renderPrepBoxes). No more Equipped box — the Loadout box's own weapon/major/minor slots
+         already show what's equipped, so a separate read-only copy was redundant. -->
+    <div class="windowBottomRow windowFullWidth">
+      <div id="terrainSection" class="windowSection bottomBox terrainBox">
         <h2>Terrain</h2>
         <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
       </div>
-    </div>
-
-    <!-- Full width of the window rather than squeezed into the narrow sidebar column — this is
-         the tallest section (shop rows + talisman bag), and the extra horizontal room lets its
-         own internal layout (see .prepColumns below) spread out instead of stacking so tall that
-         the whole page needed to scroll to see it. -->
-    <div id="prepPanel" class="windowFullWidth" style="display:none">
-      <p class="prepHint">Adjust your build and shop before starting the fight!</p>
-      <div class="tabBar">
-        <button class="tabBtn" data-tab="loadout">🎒 Loadout</button>
-        <button class="tabBtn" data-tab="shop">🛒 Shop</button>
-      </div>
-      <div id="loadoutTabContent"></div>
-      <div id="shopTabContent">
+      <div id="shopSection" class="windowSection bottomBox shopBox" style="display:none">
+        <h2>Shop</h2>
         <div class="shopGoldRow">Gold <b id="goldAmt">0</b></div>
         <div class="shopControls">
           <button id="shopFreezeBtn" title="Keep this exact shop for the next prep phase">Freeze Shop</button>
           <button id="shopRerollBtn" title="Spend gold to reroll all 5 slots right now">Reroll (1g)</button>
         </div>
         <div id="shopPanel"></div>
+      </div>
+      <div id="loadoutSection" class="windowSection bottomBox loadoutBox" style="display:none">
+        <h2>Loadout &amp; Inventory</h2>
+        <p class="prepHint">Adjust your build before starting the fight!</p>
+        <div id="loadoutTabContent"></div>
       </div>
     </div>
   </div>
@@ -1168,7 +1160,6 @@
   let pathOptions = [];      // the 3 current encounter choices, only populated during 'choosing'
   let chosenEncounter = null; // the encounter/room locked in for 'prepping'/'beginnerPrep'/'roomVisit'/'combat'
   let roomState = null;       // ephemeral working data for whichever room is active during 'roomVisit'
-  let prepTab = 'loadout';   // 'loadout' | 'shop' — which tab is active in the combined prep hub
   let floor = 1;             // which floor of the run this is — purely structural, see FLOOR_LENGTH
   let floorPosition = 1;     // the slot (1-FLOOR_LENGTH) about to be offered/fought this floor
   let heroHex = { ...HERO_SPAWN_HEX }; // resets to HERO_SPAWN_HEX at the start of every encounter (see
@@ -2129,7 +2120,6 @@
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
     terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
     phase = 'prepping';
-    prepTab = 'loadout';
     refreshShopForPrep();
     renderAll();
     maybeAutoStart();
@@ -2149,7 +2139,6 @@
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
     terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
     phase = 'prepping';
-    prepTab = 'loadout';
     refreshShopForPrep();
     renderAll();
     maybeAutoStart();
@@ -2171,7 +2160,6 @@
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
     terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
-    prepTab = 'loadout';
     refreshShopForPrep();
     renderAll();
     maybeAutoStart();
@@ -2539,26 +2527,6 @@
     renderTerrainKeyPanel();
   }
 
-  // Read-only "what's actually active right now" reference, always visible regardless of
-  // phase — reconfiguring what's equipped only happens from the Loadout tab during 'prepping'.
-  function renderTalismansPanel() {
-    const el = document.getElementById('talismansPanel');
-    const ids = hero.equipped.major.concat(hero.equipped.minor);
-    if (ids.length === 0) {
-      el.innerHTML = '<span class="empty">Nothing equipped yet.</span>';
-      return;
-    }
-    el.innerHTML = '';
-    ids.forEach(id => {
-      const t = TALISMANS.find(x => x.id === id);
-      const chip = document.createElement('span');
-      chip.className = 'talismanChip tier-' + t.tier;
-      chip.title = t.desc;
-      chip.textContent = `${t.icon} ${t.name}`;
-      el.appendChild(chip);
-    });
-  }
-
   function renderAbilitiesPanel() {
     const el = document.getElementById('abilitiesPanel');
     const owned = Object.keys(ABILITY_CFG).filter(id => isEquipped(id));
@@ -2725,7 +2693,7 @@
 
   function renderShopPanel() {
     // The beginner encounter's prep phase gets the same functional shop as every other
-    // encounter now (see task 79/renderPrepPanel) — not just the same look.
+    // encounter now (see task 79/renderPrepBoxes) — not just the same look.
     const canShop = phase === 'prepping' || phase === 'beginnerPrep';
     const freezeBtn = document.getElementById('shopFreezeBtn');
     freezeBtn.textContent = shopFrozenNext ? '🔒 Frozen for next prep' : 'Freeze Shop';
@@ -2823,7 +2791,7 @@
     document.getElementById('essenceAmtModal').textContent = legacy.essence;
   }
 
-  // Slots + bag, only meaningfully interactive during 'prepping' (renderPrepPanel hides the
+  // Slots + bag, only meaningfully interactive during 'prepping' (renderPrepBoxes hides the
   // whole thing otherwise). Every chip carries a native tooltip (see t.desc) so it's always
   // clear what a talisman does without needing to equip it first.
   function renderLoadoutTab() {
@@ -2896,22 +2864,15 @@
     el.appendChild(bagWrap);
   }
 
-  function switchPrepTab(tab) {
-    prepTab = tab;
-    renderPrepPanel();
-  }
-
-  // The combined prep hub (Loadout + Shop tabs) shows during both 'prepping' and
-  // 'beginnerPrep' — the very first fight gets the same weapon/loadout/shop access as every
-  // other encounter now, rather than being specially skipped. Only the choosing/combat/gameover
-  // phases hide it entirely.
-  function renderPrepPanel() {
-    const panel = document.getElementById('prepPanel');
-    if (phase !== 'prepping' && phase !== 'beginnerPrep') { panel.style.display = 'none'; return; }
-    panel.style.display = '';
-    document.querySelectorAll('.tabBtn').forEach(b => b.classList.toggle('active', b.dataset.tab === prepTab));
-    document.getElementById('loadoutTabContent').style.display = prepTab === 'loadout' ? '' : 'none';
-    document.getElementById('shopTabContent').style.display = prepTab === 'shop' ? '' : 'none';
+  // Shop and Loadout & Inventory show as separate boxes, both visible at once, during both
+  // 'prepping' and 'beginnerPrep' — the very first fight gets the same weapon/loadout/shop access
+  // as every other encounter now, rather than being specially skipped. Only the
+  // choosing/combat/gameover phases hide them entirely. Terrain Key lives outside this function
+  // (see renderHeroPanel/renderTerrainKeyPanel) since it stays visible in every phase.
+  function renderPrepBoxes() {
+    const show = phase === 'prepping' || phase === 'beginnerPrep';
+    document.getElementById('shopSection').style.display = show ? '' : 'none';
+    document.getElementById('loadoutSection').style.display = show ? '' : 'none';
     renderLoadoutTab();
     renderShopPanel();
   }
@@ -3069,11 +3030,10 @@
   function renderAll() {
     renderTopbar();
     renderHeroPanel();
-    renderTalismansPanel();
     renderEncounterPreview();
     renderPathModal();
     renderRoomModal();
-    renderPrepPanel();
+    renderPrepBoxes();
     renderLegacyPanel();
   }
 
@@ -4285,7 +4245,6 @@
     chosenEncounter = null;
     pathOptions = [];
     roomState = null;
-    prepTab = 'loadout';
     floor = 1;
     floorPosition = 1;
     heroHex = { ...HERO_SPAWN_HEX };
@@ -4338,10 +4297,6 @@
       document.querySelectorAll('.stanceBtn').forEach(b => b.classList.toggle('active', b === btn));
     });
   });
-  document.querySelectorAll('.tabBtn').forEach(btn => {
-    btn.addEventListener('click', () => switchPrepTab(btn.dataset.tab));
-  });
-
   bestWave = Number(lsGet(BEST_WAVE_KEY) || 0);
   legacy = loadLegacy();
   restart();
