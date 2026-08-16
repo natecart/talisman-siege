@@ -50,6 +50,7 @@
   button.primary { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
   button.primary:hover:not(:disabled) { background: #4a7ad8; }
   button.speedBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
+  button.stanceBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
   label.chk { font-size: 13px; color: #bbb; display: flex; align-items: center; gap: 4px; cursor: pointer; }
   #wipeBtn { background: transparent; border-color: #4a2f2f; color: #a06060; font-size: 11px; padding: 5px 9px; }
   #wipeBtn:hover:not(:disabled) { background: #3a1f1f; color: #e08a8a; border-color: #6b3a3a; }
@@ -124,6 +125,19 @@
   .abilityName { font-size: 12px; color: #ccc; margin-bottom: 3px; }
   .abilityBarOuter { background: #1f2a3a; border-radius: 4px; height: 8px; overflow: hidden; }
   .abilityBarInner { background: linear-gradient(90deg,#4d8fdb,#7dd3fc); height: 100%; width: 0%; transition: width 0.1s linear; }
+
+  .setupAbilityRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; flex-wrap: wrap; }
+  .setupAbilityName { font-size: 12px; color: #ccc; }
+  .setupAbilityControls { display: flex; align-items: center; gap: 6px; }
+  .setupAbilityControls button { padding: 3px 8px; font-size: 11px; }
+  .setupStatus, .setupHint { font-size: 11px; color: #888; }
+
+  #terrainKeyPanel .empty { color: #666; font-size: 12px; }
+  .terrainKeyRow { display: flex; align-items: center; gap: 7px; padding: 4px 0; font-size: 12px; color: #ccc; cursor: default; }
+  .terrainKeySwatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .terrainKeySwatch.swatch-chasm { background: radial-gradient(circle, #08080a, #302f38); border: 1px solid #000; }
+  .terrainKeySwatch.swatch-fogpatch { background: rgba(225,228,232,0.55); border: 1px solid rgba(200,203,208,0.5); }
+  .terrainKeySwatch.swatch-debris { background: #5c4a3a; border: 1px solid #3d3128; }
 
   .shopRow {
     display: flex;
@@ -247,6 +261,16 @@
   }
   .modalLegacySection h3 { margin: 0 0 8px; font-size: 13px; color: #d8b84a; font-weight: 600; }
 
+  .dmgSummaryCols { display: flex; gap: 20px; text-align: left; margin-bottom: 16px; flex-wrap: wrap; }
+  .dmgSummaryCol { flex: 1; min-width: 180px; }
+  .dmgSummaryCol h3 { margin: 0 0 6px; font-size: 13px; color: #ccc; font-weight: 600; }
+  .dmgSummaryList .empty { color: #666; font-size: 12px; }
+  .dmgSummaryRow { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: #ccc; padding: 3px 0; border-bottom: 1px solid #2c2c35; }
+  .dmgSummaryRow:last-child { border-bottom: none; }
+  .dmgSummaryRow span:last-child { color: #fff; font-weight: 600; }
+  #combatSummaryModal .dmgSummaryCol:first-child .dmgSummaryRow span:last-child { color: #7dd3fc; }
+  #combatSummaryModal .dmgSummaryCol:last-child .dmgSummaryRow span:last-child { color: #e88; }
+
   @media (max-width: 760px) {
     #main { flex-direction: column; }
     #sidebar { width: 100%; }
@@ -261,11 +285,15 @@
     <div class="stat">Depth <b id="waveNum">1</b></div>
     <div class="stat">Best Depth <b id="bestWave">0</b></div>
     <div class="stat">Essence <b id="essenceAmt">0</b></div>
+    <div class="stat">Gold <b id="goldAmtTop">0</b></div>
     <div class="spacer"></div>
     <span class="stat">Speed</span>
     <button class="speedBtn active" data-speed="1">1x</button>
     <button class="speedBtn" data-speed="2">2x</button>
     <button class="speedBtn" data-speed="3">3x</button>
+    <span class="stat">Stance</span>
+    <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
+    <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
     <label class="chk"><input type="checkbox" id="autoStartChk"> Auto-start fights</label>
     <button id="startWaveBtn" class="primary">Start Fight</button>
     <button id="restartBtn">New Attempt</button>
@@ -308,6 +336,14 @@
         <h2>Abilities</h2>
         <div id="abilitiesPanel"><span class="empty">No abilities yet — some major talismans grant one.</span></div>
       </div>
+      <div class="panel">
+        <h2>Setup Abilities</h2>
+        <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
+      </div>
+      <div class="panel">
+        <h2>Terrain</h2>
+        <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
+      </div>
       <div class="panel" id="prepPanel" style="display:none">
         <p class="prepHint">Adjust your build and shop before starting the fight!</p>
         <div class="tabBar">
@@ -342,6 +378,23 @@
 </div>
 
 
+<div id="combatSummaryModal" class="modal hidden">
+  <div class="modalBox">
+    <h2 id="combatSummaryTitle">Encounter Cleared!</h2>
+    <div class="dmgSummaryCols">
+      <div class="dmgSummaryCol">
+        <h3>Damage Dealt</h3>
+        <div id="dmgDealtList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Taken</h3>
+        <div id="dmgTakenList" class="dmgSummaryList"></div>
+      </div>
+    </div>
+    <button class="primary" id="combatSummaryContinueBtn">Continue</button>
+  </div>
+</div>
+
 <div id="roomModal" class="modal hidden">
   <div class="modalBox">
     <h2 id="roomModalTitle">Room</h2>
@@ -356,6 +409,16 @@
     <div class="bigStat" id="finalWave">Depth 1</div>
     <div class="bestLine" id="bestLine">Best depth: 1</div>
     <p class="sub">Shop and gold reset — every encounter you cleared fed essence into your permanent Legacy tree (double for a new best).</p>
+    <div class="dmgSummaryCols">
+      <div class="dmgSummaryCol">
+        <h3>Damage Dealt</h3>
+        <div id="gameOverDmgDealtList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Taken</h3>
+        <div id="gameOverDmgTakenList" class="dmgSummaryList"></div>
+      </div>
+    </div>
     <div class="modalLegacySection">
       <h3>Spend Essence — <span id="essenceAmtModal">0</span> available</h3>
       <div id="legacyPanelGameOver"></div>
@@ -478,11 +541,13 @@
   };
 
   const UPGRADES = [
-    // --- Core stats: flat, additive, capped at level 10 ---
-    { id: 'damage',    name: 'Sharpen Blade',    desc: '+2 Damage',              baseCost: 8,  mult: 1.16, category: 'generic', maxLevel: 10 },
-    { id: 'atkSpeed',  name: 'Swift Strikes',    desc: '+0.1 Attack Speed',      baseCost: 10, mult: 1.18, category: 'generic', maxLevel: 10 },
-    { id: 'maxHP',     name: 'Vitality',         desc: '+15 Max HP',             baseCost: 8,  mult: 1.15, category: 'generic', maxLevel: 10 },
-    { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 12, mult: 1.22, category: 'generic', maxLevel: 10 },
+    // --- Core stats: flat, additive, capped at level 10. Uniform 5g start / 1.4x growth
+    // (5/7/10/14/19/27/38/53/74/103g across the 10 levels) so a few early levels are always
+    // affordable enough to survive on, not just a mid-run investment. ---
+    { id: 'damage',    name: 'Sharpen Blade',    desc: '+2 Damage',              baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    { id: 'atkSpeed',  name: 'Swift Strikes',    desc: '+0.1 Attack Speed',      baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    { id: 'maxHP',     name: 'Vitality',         desc: '+15 Max HP',             baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
 
     // --- Damage Reduction: unlocks once Armor is maxed, the scaling counterpart to Armor ---
     { id: 'ironResolve', name: 'Iron Resolve',   desc: 'Unlock Damage Reduction', baseCost: 20, mult: 1, category: 'archetype', maxLevel: 1, requiresMaxed: 'armor', unlocksStat: 'damageReduction' },
@@ -506,6 +571,28 @@
   const SMOKE_DURATION = 3;
   const SMOKE_SLOW_MULT = 0.5;
 
+  // ---------------- Data: random battlefield terrain ----------------
+  // Rolled fresh for every combat encounter (see generateTerrainForEncounter) — unlike Ice Wall/
+  // Bear Trap, the player never places this, and unlike Smoke Screen it's symmetric: it affects
+  // the hero exactly the same way it affects enemies, since it's passive environment rather than
+  // a player-cast tool aimed at enemies. Each type owns exactly one terrainAt() axis, by design:
+  // Chasm blocks movement only (you can still shoot/see over it — it's a pit, not a wall), Fog
+  // Patch blocks sight only (fully walkable), Debris blocks neither but taxes whoever's standing
+  // in it. blocksMovement/blocksLOS/speedMult/atkSpeedMult are read by terrainAt to build the
+  // merged per-hex descriptor; any key a type doesn't set keeps terrainAt's neutral default.
+  const TERRAIN_TYPES = {
+    chasm:    { id: 'chasm',    name: 'Chasm',     blocksMovement: true,
+      keyDesc: 'Impassable to normal movement — everyone, including you, must path around it. It doesn\'t block line of sight, so ranged attacks still fly straight over it.' },
+    fogpatch: { id: 'fogpatch', name: 'Fog Patch', blocksLOS: true,
+      keyDesc: 'Blocks line of sight through it — anyone (including you) trying to attack at range through the fog is blocked. Fully walkable, and never affects melee, since there\'s nothing "between" two adjacent hexes to see through.' },
+    debris:   { id: 'debris',   name: 'Debris',    speedMult: 0.5, atkSpeedMult: 0.5,
+      keyDesc: 'Slows movement and attack speed by 50% for whoever is standing in it — including you.' },
+  };
+  const TERRAIN_TYPE_IDS = Object.keys(TERRAIN_TYPES);
+  // Random flourish drawn on top of each Debris hex, picked once at generation time (not
+  // re-rolled per frame, or it would flicker) — purely decorative, no gameplay effect.
+  const DEBRIS_DETAILS = ['sword', 'shield', 'barrel'];
+
   // ---------------- Data: talismans ----------------
   // Minor talismans are numeric/utility tweaks, offered after wave 3 of every arc.
   // Major talismans are build-defining — either an always-on passive or an independent
@@ -524,7 +611,7 @@
     { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+20% Damage.' },
     { id: 'ironvitality', tier: 'minor', icon: '\u{1F49A}', name: 'Iron Vitality', desc: '+25% Max HP.' },
     { id: 'quickening',  tier: 'minor', icon: '\u{23F1}\u{FE0F}', name: 'Quickening', desc: '-20% to all ability cooldowns.' },
-    { id: 'smokescreen', tier: 'minor', type: 'ability', icon: '\u{1F32B}\u{FE0F}', name: 'Smoke Screen', desc: `Every ${ABILITY_CFG.smokescreen.cooldown}s, blind the furthest enemy's patch of 4 hexes for ${SMOKE_DURATION}s — enemies inside flee, move at ${Math.round(SMOKE_SLOW_MULT * 100)}% speed, and can't attack until they escape it.` },
+    { id: 'smokescreen', tier: 'minor', type: 'ability', icon: '\u{1F32B}\u{FE0F}', name: 'Smoke Screen', desc: `Every ${ABILITY_CFG.smokescreen.cooldown}s, blind the furthest enemy's patch of 4 hexes for ${SMOKE_DURATION}s — enemies inside move at ${Math.round(SMOKE_SLOW_MULT * 100)}% speed and can't attack until they step out. Affects enemies only — unlike terrain, it never slows or blinds you.` },
     { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP.' },
     { id: 'overcharge',  tier: 'major', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.' },
     { id: 'executioner', tier: 'major', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.' },
@@ -533,7 +620,11 @@
     { id: 'electricshock', tier: 'major', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack arcs to every enemy adjacent to your target for bonus damage.' },
     { id: 'afterimage', tier: 'major', type: 'ability', icon: '\u{1F465}', name: 'After Image', desc: `Every ${ABILITY_CFG.afterimage.cooldown}s, swap places with a decoy sent to the safest hex 4 tiles out. The decoy has 20% of your max HP and draws enemy attacks in your place.` },
     { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 2 hexes, stunning enemies for 1s/0.5s the closer they are.` },
+    { id: 'icewall',     tier: 'major', type: 'setup', icon: '\u{2744}\u{FE0F}', name: 'Ice Wall', desc: 'Before the fight, place up to 3 connected hexes of impassable ice — enemies (and you) must path around them for the whole fight.' },
+    { id: 'beartrap',    tier: 'minor', type: 'setup', icon: '\u{1FAA4}', name: 'Bear Trap', desc: 'Before the fight, place 1 hex. The first enemy to step on it takes a heavy hit and is rooted for 2s, then it’s spent. Affects enemies only — you can walk over it freely.' },
   ];
+
+  const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
 
   // ---------------- Data: hero weapons ----------------
   // Independent of talismans — the hero owns all three from the start (see freshHero) and
@@ -543,11 +634,28 @@
   // = melee, spear = reach, crossbow = ranged. `level` doesn't do anything yet (no upgrade path
   // exists) — it's tracked now so a future leveling system has somewhere to live.
   const HERO_WEAPONS = {
-    sword:    { id: 'sword',    name: 'Sword',    icon: '\u{1F5E1}\u{FE0F}', role: 'melee' },
-    spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach' },
-    crossbow: { id: 'crossbow', name: 'Crossbow', icon: '\u{1F3F9}', role: 'ranged' },
+    sword:    { id: 'sword',    name: 'Sword',    icon: '\u{1F5E1}\u{FE0F}', role: 'melee',  desc: 'Balanced melee weapon — no tradeoffs.' },
+    spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach',  desc: '0.75x attack speed, 1.25x damage. Pierces in a line — the near hex takes a full hit, the target takes 0.75x.' },
+    crossbow: { id: 'crossbow', name: 'Crossbow', icon: '\u{1F3F9}', role: 'ranged', desc: '0.5x attack speed, 1.5x damage per shot.' },
   };
   const HERO_WEAPON_IDS = Object.keys(HERO_WEAPONS);
+
+  // Loadout tab hover tooltip — computeStats(id) previews the weapon's REAL numbers (every
+  // active talisman bonus included) as if it were equipped, not just its raw multipliers, so
+  // the tooltip stays accurate as the build changes. `w.effect` is an unused hook today —
+  // future elemental weapons (Ice/Fire) can set it and this line picks it up automatically.
+  function weaponTooltip(id) {
+    const w = HERO_WEAPONS[id];
+    const s = computeStats(id);
+    const lines = [
+      w.desc,
+      `Damage: ${Math.round(s.dmg)}`,
+      `Attack Speed: ${s.atkSpeed.toFixed(2)}/s`,
+      `Range: ${w.role} (${s.atkRange} hex${s.atkRange > 1 ? 'es' : ''})`,
+    ];
+    if (w.effect) lines.push(`Effect: ${w.effect}`);
+    return lines.join('\n');
+  }
 
   // opts fed straight into drawFacingUnit (see its weaponShape dispatch) for whichever weapon
   // is currently equipped — Spear mirrors the Warband Leader's long reach/thrust, Crossbow
@@ -572,9 +680,18 @@
     enemyBaseHP: 18, enemyHPGrowth: 1.15,
     enemyBaseDmg: 4, enemyDmgGrowth: 1.11,
     enemyAtkInterval: 1.2,
+    // Hexes/second, before each type's own moveSpeedMult (see ENEMY_TYPES/resolveUnitStats) —
+    // roughly "1 hex per attack cycle" on purpose, so movement and combat read on the same
+    // timescale instead of units instantly snapping across the board between attacks.
+    enemyMoveSpeed: 1.2,
     eliteHPMult: 3, eliteDmgMult: 1.5,
     floorBossHPMult: 6, floorBossDmgMult: 2.2,
   };
+
+  // The hero's own base movement speed (hexes/second) — same baseline as enemyMoveSpeed for
+  // parity; no talisman/upgrade scales it yet, but the slot exists for one later (see atkRange's
+  // own comment in computeStats for the same pattern).
+  const HERO_MOVE_SPEED = 1.2;
 
   // ---------------- Floor structure ----------------
   // Slay-the-Spire-style pacing on top of the path-choice loop: 12 regular encounter slots
@@ -633,13 +750,21 @@
   // many, expressed as filters over role/weight rather than hardcoded unit ids — adding a new
   // unit that shares existing tags makes it eligible everywhere those tags are used, with zero
   // edits to any archetype.
+  // moveSpeedMult multiplies WAVE_CFG.enemyMoveSpeed directly (higher = faster — deliberately
+  // the opposite direction from atkIntervalMult, where higher = slower, since "speed" reads
+  // more naturally that way than a time multiplier would). Authored per-unit by feel, same as
+  // dmgMult: skittish light units a bit quicker, armored/huge ones a bit slower.
+  // `smart` (default false = mindless) — whether this type routes around Debris when a path
+  // exists that avoids it, falling back to walking straight through if that's the only way
+  // (see resolveEnemyMovement's debrisAvoidingOccupied pass). Nate's explicit per-type call:
+  // Warband Leader/Knight/Archer are smart, Wretch/Raider/Brute are mindless.
   const ENEMY_TYPES = {
-    wretch: { name: 'Wretch',         role: 'melee',  weight: 'light',    dmgMult: 0.7 },
-    raider: { name: 'Raider',         role: 'melee',  weight: 'medium',   dmgMult: 1.0 },
-    leader: { name: 'Warband Leader', role: 'reach',  weight: 'heavy',    dmgMult: 1.7 },
-    knight: { name: 'Knight',         role: 'melee',  weight: 'heavy',    dmgMult: 1.0 },
-    archer: { name: 'Archer',         role: 'ranged', weight: 'light',    dmgMult: 0.5, atkIntervalMult: 0.5 },
-    brute:  { name: 'Brute',          role: 'melee',  weight: 'miniboss', dmgMult: 1.6 },
+    wretch: { name: 'Wretch',         role: 'melee',  weight: 'light',    dmgMult: 0.7, moveSpeedMult: 1.3 },
+    raider: { name: 'Raider',         role: 'melee',  weight: 'medium',   dmgMult: 1.0, moveSpeedMult: 1.0 },
+    leader: { name: 'Warband Leader', role: 'reach',  weight: 'heavy',    dmgMult: 1.7, moveSpeedMult: 1.0, smart: true },
+    knight: { name: 'Knight',         role: 'melee',  weight: 'heavy',    dmgMult: 1.0, moveSpeedMult: 0.8, smart: true },
+    archer: { name: 'Archer',         role: 'ranged', weight: 'light',    dmgMult: 0.5, atkIntervalMult: 0.5, moveSpeedMult: 1.1, smart: true },
+    brute:  { name: 'Brute',          role: 'melee',  weight: 'miniboss', dmgMult: 1.6, moveSpeedMult: 0.7 },
   };
 
   // Per-unit opts fed straight into drawFacingUnit (see its weaponShape dispatch) — this is
@@ -686,7 +811,11 @@
     const hpMult = WEIGHT_BANDS[t.weight].hpMult;
     const hp = Math.round(WAVE_CFG.enemyBaseHP * Math.pow(WAVE_CFG.enemyHPGrowth, depth - 1) * hpMult);
     const dmg = Math.round(WAVE_CFG.enemyBaseDmg * Math.pow(WAVE_CFG.enemyDmgGrowth, depth - 1) * t.dmgMult);
-    return { hp, dmg, role: t.role, atkInterval: WAVE_CFG.enemyAtkInterval * (t.atkIntervalMult || 1) };
+    return {
+      hp, dmg, role: t.role,
+      atkInterval: WAVE_CFG.enemyAtkInterval * (t.atkIntervalMult || 1),
+      moveSpeed: WAVE_CFG.enemyMoveSpeed * (t.moveSpeedMult || 1),
+    };
   }
 
   // TODO(difficulty-scoring): archetypes/affixes are still placeholder numbers authored by
@@ -843,7 +972,7 @@
       const type = ENEMY_TYPES[g.type];
       const resolved = resolveUnitStats(g.type, depth);
       const { hp, dmg } = applyAffixStats(affixes, resolved.hp, resolved.dmg);
-      return { type: g.type, count: g.count, hp, dmg, role: resolved.role, atkInterval: resolved.atkInterval, weight: type.weight };
+      return { type: g.type, count: g.count, hp, dmg, role: resolved.role, atkInterval: resolved.atkInterval, moveSpeed: resolved.moveSpeed, weight: type.weight };
     });
     if (affixes.includes('horde') && archetype.hordeEligible) units[0].count += AFFIXES.horde.countDelta;
 
@@ -990,9 +1119,42 @@
   let heroTargetId = null;  // sticky target (see pickHeroTarget) — survives across attacks, not re-rolled every hit
   let smokeZones = [];       // active Smoke Screen patches: { hexes: [{row,idx}...], timer }, ticked down
                               // in real sim-time by simulationStep, reset to [] at the start of every fight
+  // Per-fight damage-source tallies, shown in the post-combat summary (see showCombatSummary/
+  // gameOver) — reset to empty at the start of every fight so the screen only ever reflects the
+  // fight that just ended, not a running lifetime total.
+  let combatStats = { dealt: {}, taken: {} };
+  function logDamageDealt(source, amount) {
+    if (amount <= 0) return;
+    combatStats.dealt[source] = (combatStats.dealt[source] || 0) + amount;
+  }
+  function logDamageTaken(source, amount) {
+    if (amount <= 0) return;
+    combatStats.taken[source] = (combatStats.taken[source] || 0) + amount;
+  }
+
+  // Setup abilities (Ice Wall / Bear Trap) — placed during PREP, not on a combat cooldown, so
+  // they're reset when a fresh prep phase begins (choosePath/enterBeginnerPrep/enterBossPrep),
+  // NOT in startFight — that would wipe out whatever was just placed right before combat starts.
+  let iceWallHexes = [];     // committed wall hexes (up to 3), persists prep -> combat, no timer
+  let beartrapHex = null;    // committed trap hex, or null if not placed; consumed (nulled) on trigger
+  let pendingWallHexes = []; // in-progress Ice Wall selection, only touched while placingSetupId === 'icewall'
+  let placingSetupId = null; // 'icewall' | 'beartrap' | null — which setup ability the next hex click affects
+
+  // Random battlefield terrain (Chasm/Fog Patch/Debris) — rolled once per combat encounter by
+  // generateTerrainForEncounter, at the same moment the enemy queue is built (choosePath/
+  // enterBeginnerPrep/enterBossPrep), and never touched again until the next encounter replaces
+  // it. Each entry is { hex, type, detail? } — detail is only set for 'debris' (its random
+  // decorative flourish).
+  let terrainFeatures = [];
+
   let nextEnemyId = 1;       // stable spawn-order id, used to tiebreak both targeting and movement priority
   let speed = 1;
   let autoStart = false;
+  // Mid-fight hero stance, toggled freely via UI (see the Advance/Hold buttons) — 'advance' is
+  // today's always-chase behavior; 'hold' fully freezes the hero's own movement (it still attacks
+  // anything already in range) so you can turtle behind an Ice Wall until, say, an archer starts
+  // shooting you and it's worth pushing out. Reset to 'advance' at the start of every fight.
+  let heroStance = 'advance';
   let shopOffer = [];        // ids of the up-to-5 upgrades currently offered
   let shopFrozenNext = false; // if true, the next prep-phase shop refresh is skipped once
   let rerollCost = 1;         // doubles per manual reroll this prep phase, resets on refresh
@@ -1018,6 +1180,7 @@
       weapons: { sword: { level: 1 }, spear: { level: 1 }, crossbow: { level: 1 } }, // owned from the start — see HERO_WEAPONS
       equippedWeapon: 'sword', // drives atkRange (see computeStats) and the hero's own drawn weapon shape (see HERO_WEAPON_VISUALS)
       attackCount: 0, atkTimer: 0, cooldowns: {}, momentumStacks: 0, secondWindUsedThisWave: false,
+      moveSpeed: HERO_MOVE_SPEED, moveProgress: 0, // hexes/second — see resolveHeroMovement/advanceMoveProgress
       restBuffFightsRemaining: 0, // Wanderer's Inn "Rest" — see computeStats and waveCleared
       poisonStacks: 0, plaguedDmgRef: 0, // Plagued affix — see enemyAttack and simulationStep, reset each fight
       decoy: null, // After Image's decoy: { hex, hp, maxHp } while up — see triggerAfterImage, reset each fight
@@ -1068,7 +1231,10 @@
     renderAll();
   }
 
-  function computeStats() {
+  // weaponIdOverride lets the Loadout tab preview any weapon's real stat line (including every
+  // active talisman bonus) without actually equipping it — see weaponTooltip.
+  function computeStats(weaponIdOverride) {
+    const equippedWeapon = weaponIdOverride || hero.equippedWeapon;
     const u = hero.upgrades;
     const has = id => isEquipped(id);
 
@@ -1095,12 +1261,12 @@
     // Driven entirely by whichever weapon is equipped (see HERO_WEAPONS/equipWeapon) — the
     // same ROLE_RANGE lookup enemies use for their own role, so Sword/Spear/Crossbow really
     // just mean melee/reach/ranged for the hero too.
-    let atkRange = ROLE_RANGE[HERO_WEAPONS[hero.equippedWeapon].role];
+    let atkRange = ROLE_RANGE[HERO_WEAPONS[equippedWeapon].role];
     // The Spear trades attack speed for damage and its piercing thrust (see heroAttack) —
     // a real tradeoff, not a strict upgrade over the Sword. The Crossbow trades even more
     // speed for a bigger hit per shot, matching the Archer's own slow-but-hard-hitting feel.
-    if (hero.equippedWeapon === 'spear') { atkSpeed *= 0.75; dmg *= 1.25; }
-    if (hero.equippedWeapon === 'crossbow') { atkSpeed *= 0.5; dmg *= 1.5; }
+    if (equippedWeapon === 'spear') { atkSpeed *= 0.75; dmg *= 1.25; }
+    if (equippedWeapon === 'crossbow') { atkSpeed *= 0.5; dmg *= 1.5; }
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
 
@@ -1154,11 +1320,21 @@
     if (pct > 0) healHero(dmg * pct);
   }
 
+  // Display label for the damage summary's "taken" side — named per enemy type (typeId is null
+  // only for the floor boss, see makeEnemy) so e.g. "Wretch Auto Attack" and "Knight Auto Attack"
+  // tally separately instead of collapsing into one generic "Enemy" bucket.
+  function enemyDamageLabel(enemy) {
+    const typeName = enemy.typeId && ENEMY_TYPES[enemy.typeId] ? ENEMY_TYPES[enemy.typeId].name : (enemy.isBoss ? 'Boss' : 'Enemy');
+    return `${typeName} Auto Attack`;
+  }
+
   function makeEnemy(hp, dmg, opts) {
     const o = opts || {};
     return {
       id: nextEnemyId++, hex: o.hex, role: o.role || 'melee',
       atkInterval: o.atkInterval || WAVE_CFG.enemyAtkInterval,
+      moveSpeed: o.moveSpeed || WAVE_CFG.enemyMoveSpeed, // hexes/second — see resolveEnemyMovement/advanceMoveProgress
+      moveProgress: 0, // accumulates simDt*moveSpeed*terrain.speedMult each tick; steps once it reaches 1
       isBoss: !!o.isBoss, weight: o.weight || 'medium', // isBoss is strictly the true floor
       // boss (see killEnemy's log wording); weight drives render size/color (see enemyPos) —
       // a Brute is Miniboss-weight but not isBoss.
@@ -1197,6 +1373,7 @@
     if (enc.tierKey === 'boss') {
       list.push(makeEnemy(enc.hp, enc.dmg, {
         isBoss: true, weight: 'boss', role: 'melee', atkInterval: WAVE_CFG.enemyAtkInterval,
+        moveSpeed: WAVE_CFG.enemyMoveSpeed, // no ENEMY_TYPES entry (no moveSpeedMult) — the boss uses the flat baseline
         hex: { row: 3, idx: Math.floor(rowHeight(3) / 2) },
       }));
       return list;
@@ -1206,7 +1383,7 @@
     let ci = 0;
     enc.units.forEach(u => {
       for (let i = 0; i < u.count && ci < candidates.length; i++, ci++) {
-        list.push(makeEnemy(u.hp, u.dmg, { role: u.role, atkInterval: u.atkInterval, weight: u.weight, typeId: u.type, hex: candidates[ci] }));
+        list.push(makeEnemy(u.hp, u.dmg, { role: u.role, atkInterval: u.atkInterval, moveSpeed: u.moveSpeed, weight: u.weight, typeId: u.type, hex: candidates[ci] }));
       }
     });
     return list;
@@ -1335,12 +1512,14 @@
     }
 
     if (isEquipped('executioner') && target.hp / target.maxHp < 0.15) {
+      const executedHp = Math.max(1, Math.round(target.hp));
       target.hp = 0;
       target.flash = 1;
       const p = enemyPos(target);
       spawnSlash(p.x, p.y);
       spawnDamageNumber(p.x, p.y - p.r - 10, 'EXECUTED', '#ff6b6b');
       log('Executed!', 'crit');
+      logDamageDealt('Executioner', executedHp);
       killEnemy(target);
       return;
     }
@@ -1366,6 +1545,7 @@
           const fp = enemyPos(firstEnemy);
           spawnSlash(fp.x, fp.y);
           spawnDamageNumber(fp.x, fp.y - fp.r - 10, String(pierceDmg), '#fff');
+          logDamageDealt('Spear Pierce', pierceDmg);
           applyLifesteal(pierceDmg);
           applyAffixReactions(firstEnemy, pierceDmg);
           if (firstEnemy.hp <= 0) killEnemy(firstEnemy);
@@ -1387,6 +1567,7 @@
     spawnSlash(p.x, p.y);
     spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), isCrit ? '#f0c14b' : '#fff');
     if (isCrit) log(`Crit! You hit for ${dmg}.`, 'crit');
+    logDamageDealt('Auto Attack', dmg);
     applyLifesteal(dmg);
     applyAffixReactions(target, dmg);
 
@@ -1404,6 +1585,7 @@
         const ep = enemyPos(e);
         spawnShock(p.x, p.y, ep.x, ep.y);
         spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(shockDmg), '#7ec8ff');
+        logDamageDealt('Electric Shock', shockDmg);
         applyLifesteal(shockDmg);
         applyAffixReactions(e, shockDmg);
       });
@@ -1444,6 +1626,7 @@
       enemy.flash = 1;
       const p = enemyPos(enemy);
       spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), '#7dd3fc');
+      logDamageDealt('Cleave', dmg);
       applyLifesteal(dmg);
       applyAffixReactions(enemy, dmg);
     });
@@ -1508,9 +1691,10 @@
 
   // Smoke Screen — targets whichever living enemy is currently furthest from the hero and
   // blankets its hex plus the 3 neighbors nearest the hero (the confirmed 4-hex patch shape) for
-  // SMOKE_DURATION seconds. Anything caught inside flees instead of approaching (see
-  // resolveEnemyMovement/findStepAwayFromSmoke), moves at SMOKE_SLOW_MULT speed, and can't
-  // attack until it steps out (see simulationStep's enemy-attack loop).
+  // SMOKE_DURATION seconds. A pure debuff, not a repositioning effect — anything caught inside
+  // still approaches the hero normally (see resolveEnemyMovement, which reads this zone via
+  // terrainAt, not directly), just at SMOKE_SLOW_MULT speed and unable to attack until it steps
+  // out (see simulationStep's enemy-attack loop, also via terrainAt).
   function triggerSmokeScreen() {
     if (!queue.length) return;
     let target = queue[0], bestDist = -1;
@@ -1527,6 +1711,27 @@
     log('A smoke screen blankets the battlefield.', 'crit');
   }
 
+  // Bear Trap's payoff — a heavy one-time hit plus a root, using the existing stunTimer field
+  // (a rooted enemy skips movement/attack accumulation exactly the same way a stunned one does,
+  // so no new state is needed for it). Triggered from simulationStep the tick an enemy's hex
+  // matches beartrapHex; that same call site nulls beartrapHex right after, consuming it.
+  function triggerBearTrap(enemy) {
+    const s = computeStats();
+    const dmg = Math.max(1, Math.round(s.dmg * 3));
+    enemy.hp -= dmg;
+    enemy.flash = 1;
+    enemy.stunTimer = Math.max(enemy.stunTimer || 0, 2);
+    const p = enemyPos(enemy);
+    spawnSlash(p.x, p.y);
+    spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), '#ff8a3d');
+    logDamageDealt('Bear Trap', dmg);
+    applyLifesteal(dmg);
+    applyAffixReactions(enemy, dmg);
+    log('The Bear Trap snaps shut!', 'crit');
+    beartrapHex = null;
+    if (enemy.hp <= 0) killEnemy(enemy);
+  }
+
   // Cursed/Vampiric are the two affixes that react to the hero DEALING damage (as opposed to
   // Undying/Bloodlust/Horde, which are baked into the encounter's stats at generation time —
   // see applyAffixStats). Not applied to Executioner's instant kill (no real "damage dealt"
@@ -1539,6 +1744,7 @@
         hero.hp -= reflected;
         const hp = heroPixelPos();
         spawnDamageNumber(hp.x, hp.y - 45, String(reflected), '#b06bd8');
+        logDamageTaken('Cursed Reflect', reflected);
         checkHeroDeath();
       }
     }
@@ -1609,6 +1815,7 @@
     heroFlash = 1;
     spawnSplash(targetPos.x, targetPos.y - 10);
     spawnDamageNumber(targetPos.x, targetPos.y - 45, String(dmg), '#e06666');
+    logDamageTaken(enemyDamageLabel(enemy), dmg);
 
     const affixes = (chosenEncounter && chosenEncounter.affixes) || [];
     // Poison scales off whichever specific enemy inflicted the stack (its own already
@@ -1623,6 +1830,7 @@
       const refl = Math.round(dmg * s.thornsPct);
       enemy.hp -= refl;
       enemy.flash = 1;
+      logDamageDealt('Thorns', refl);
       if (enemy.hp <= 0) { killEnemy(enemy); return; }
     }
 
@@ -1644,65 +1852,99 @@
     }
   }
 
+  // Fills two containers with the per-fight damage tallies from combatStats (see logDamageDealt/
+  // logDamageTaken), sorted highest-first — shared by the victory summary modal and the game-over
+  // modal so both read from the exact same accumulated data.
+  function renderDamageSummaryInto(dealtEl, takenEl) {
+    const renderList = (el, obj) => {
+      const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
+      el.innerHTML = entries.length
+        ? entries.map(([label, amt]) => `<div class="dmgSummaryRow"><span>${label}</span><span>${Math.round(amt)}</span></div>`).join('')
+        : '<span class="empty">None</span>';
+    };
+    renderList(dealtEl, combatStats.dealt);
+    renderList(takenEl, combatStats.taken);
+  }
+
+  // Blocking recap shown the instant a fight is won, before any reward/advance flow runs —
+  // onContinue is whatever should happen next (see waveCleared), deferred until the player
+  // acknowledges what just happened.
+  function showCombatSummary(title, onContinue) {
+    document.getElementById('combatSummaryTitle').textContent = title;
+    renderDamageSummaryInto(document.getElementById('dmgDealtList'), document.getElementById('dmgTakenList'));
+    document.getElementById('combatSummaryModal').classList.remove('hidden');
+    document.getElementById('combatSummaryContinueBtn').onclick = () => {
+      document.getElementById('combatSummaryModal').classList.add('hidden');
+      onContinue();
+    };
+  }
+
   function waveCleared() {
     const clearedDepth = wave;
     const enc = chosenEncounter;
     const wasBoss = enc.tierKey === 'boss';
-    const s = computeStats();
 
-    if (enc.rewardType === 'gold') {
-      const bonus = Math.round(enc.goldAmount * s.goldMult);
-      gold += bonus;
-      log(`Encounter cleared! (+${bonus}g)`, 'wave');
-    } else if (!wasBoss) {
-      log(`Encounter cleared!`, 'wave');
-    }
-    // The boss doesn't get a card selection (see generateBossEncounter), so there's no
-    // "opportunity cost" already baked into its reward the way a picked card has — it always
-    // adds a flat gold bonus on top of its guaranteed major talisman.
-    if (wasBoss) {
-      const bossBonus = Math.round((GOLD_CFG.waveClearBase + GOLD_CFG.waveClearPerWave * clearedDepth) * 3 * s.goldMult);
-      gold += bossBonus;
-      log(`Floor ${floor} boss defeated! (+${bossBonus}g bonus)`, 'wave');
-    }
+    // Show the damage-summary recap before any of the reward/advance flow — it's about the fight
+    // that just ended, not about what's next, so it comes first and gates everything below on
+    // the player clicking Continue (see showCombatSummary).
+    const proceed = () => {
+      const s = computeStats();
+      if (enc.rewardType === 'gold') {
+        const bonus = Math.round(enc.goldAmount * s.goldMult);
+        gold += bonus;
+        log(`Encounter cleared! (+${bonus}g)`, 'wave');
+      } else if (!wasBoss) {
+        log(`Encounter cleared!`, 'wave');
+      }
+      // The boss doesn't get a card selection (see generateBossEncounter), so there's no
+      // "opportunity cost" already baked into its reward the way a picked card has — it always
+      // adds a flat gold bonus on top of its guaranteed major talisman.
+      if (wasBoss) {
+        const bossBonus = Math.round((GOLD_CFG.waveClearBase + GOLD_CFG.waveClearPerWave * clearedDepth) * 3 * s.goldMult);
+        gold += bossBonus;
+        log(`Floor ${floor} boss defeated! (+${bossBonus}g bonus)`, 'wave');
+      }
 
-    hero.momentumStacks++;
-    hero.secondWindUsedThisWave = false;
-    if (hero.restBuffFightsRemaining > 0) hero.restBuffFightsRemaining--;
-    wave = clearedDepth + 1;
+      hero.momentumStacks++;
+      hero.secondWindUsedThisWave = false;
+      if (hero.restBuffFightsRemaining > 0) hero.restBuffFightsRemaining--;
+      wave = clearedDepth + 1;
 
-    // Every clear grants essence — not just new records — so a run that dies at the same
-    // wall every time still crawls the Legacy tree forward instead of stalling completely.
-    // Breaking your all-time depth record still doubles the payout, so pushing further stays
-    // best. The fixed beginner encounter is depth 0, so it never grants essence on its own.
-    const isNewRecord = bestWave < clearedDepth;
-    const essenceGain = isNewRecord ? clearedDepth * 2 : clearedDepth;
-    if (essenceGain > 0) legacy.essence += essenceGain;
-    if (isNewRecord) {
-      bestWave = clearedDepth;
-      lsSet(BEST_WAVE_KEY, String(bestWave));
-      if (essenceGain > 0) log(`New depth record! +${essenceGain} essence for the Legacy tree.`, 'wave');
-    } else if (essenceGain > 0) {
-      log(`+${essenceGain} essence for the Legacy tree.`, 'wave');
-    }
-    saveLegacy();
+      // Every clear grants essence — not just new records — so a run that dies at the same
+      // wall every time still crawls the Legacy tree forward instead of stalling completely.
+      // Breaking your all-time depth record still doubles the payout, so pushing further stays
+      // best. The fixed beginner encounter is depth 0, so it never grants essence on its own.
+      const isNewRecord = bestWave < clearedDepth;
+      const essenceGain = isNewRecord ? clearedDepth * 2 : clearedDepth;
+      if (essenceGain > 0) legacy.essence += essenceGain;
+      if (isNewRecord) {
+        bestWave = clearedDepth;
+        lsSet(BEST_WAVE_KEY, String(bestWave));
+        if (essenceGain > 0) log(`New depth record! +${essenceGain} essence for the Legacy tree.`, 'wave');
+      } else if (essenceGain > 0) {
+        log(`+${essenceGain} essence for the Legacy tree.`, 'wave');
+      }
+      saveLegacy();
 
-    chosenEncounter = null;
+      chosenEncounter = null;
 
-    // Where to go next: the beginner encounter doesn't count toward the floor's 12 slots;
-    // a boss clear starts a fresh floor; a regular clear advances via the shared helper below
-    // (also used by non-combat rooms, which consume a floor slot but never touch `wave`/depth).
-    const advance = () => {
-      if (enc.tierKey === 'beginner') { enterChoosingPhase(); return; }
-      if (wasBoss) { floor++; floorPosition = 1; enterChoosingPhase(); return; }
-      advanceFloorPosition();
+      // Where to go next: the beginner encounter doesn't count toward the floor's 12 slots;
+      // a boss clear starts a fresh floor; a regular clear advances via the shared helper below
+      // (also used by non-combat rooms, which consume a floor slot but never touch `wave`/depth).
+      const advance = () => {
+        if (enc.tierKey === 'beginner') { enterChoosingPhase(); return; }
+        if (wasBoss) { floor++; floorPosition = 1; enterChoosingPhase(); return; }
+        advanceFloorPosition();
+      };
+
+      if (enc.rewardType === 'talisman') {
+        offerTalismanChoice(enc.rewardTalismanTier, { onDone: advance });
+      } else {
+        advance();
+      }
     };
 
-    if (enc.rewardType === 'talisman') {
-      offerTalismanChoice(enc.rewardTalismanTier, { onDone: advance });
-    } else {
-      advance();
-    }
+    showCombatSummary(wasBoss ? `Floor ${floor} Boss Defeated!` : 'Encounter Cleared!', proceed);
   }
 
   // Moves to the next floor slot, or triggers the mandatory boss once slot 12 is done. Shared
@@ -1719,6 +1961,7 @@
     log(`You fell at depth ${wave}.`, 'death');
     document.getElementById('finalWave').textContent = `Depth ${wave}`;
     document.getElementById('bestLine').textContent = `Best depth: ${bestWave}`;
+    renderDamageSummaryInto(document.getElementById('gameOverDmgDealtList'), document.getElementById('gameOverDmgTakenList'));
     document.getElementById('gameOverModal').classList.remove('hidden');
     renderAll();
   }
@@ -1733,10 +1976,22 @@
   // The floor's mandatory capstone fight — skips the choosing screen entirely (there's
   // nothing to pick) but otherwise reuses the normal prep hub, so you still get a chance to
   // shop/re-equip right before it.
+  // Setup-ability state (Ice Wall/Bear Trap) belongs to the fight about to be prepped, not the
+  // one just cleared — reset whenever a fresh prep phase begins, never in startFight (that would
+  // wipe out whatever was just placed moments before the fight actually starts).
+  function resetSetupAbilities() {
+    iceWallHexes = [];
+    beartrapHex = null;
+    pendingWallHexes = [];
+    placingSetupId = null;
+  }
+
   function enterBossPrep() {
+    resetSetupAbilities();
     chosenEncounter = generateBossEncounter(wave, floor);
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
+    terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
     phase = 'prepping';
     prepTab = 'loadout';
     refreshShopForPrep();
@@ -1753,8 +2008,10 @@
       enterRoomVisit();
       return;
     }
+    resetSetupAbilities();
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
+    terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
     phase = 'prepping';
     prepTab = 'loadout';
     refreshShopForPrep();
@@ -1767,6 +2024,7 @@
   // encounter now, just enough gold to make the first real shop visit worthwhile once the real
   // path-choice loop begins.
   function enterBeginnerPrep() {
+    resetSetupAbilities();
     phase = 'beginnerPrep';
     chosenEncounter = {
       type: 'combat', tierKey: 'beginner', tierLabel: 'Beginner', depth: 0, affixes: [], forceMultiSide: false,
@@ -1776,6 +2034,7 @@
     };
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
+    terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
     prepTab = 'loadout';
     refreshShopForPrep();
     renderAll();
@@ -1982,6 +2241,7 @@
     // queue was already built (and visible on the board) back when chosenEncounter was set —
     // see choosePath/enterBeginnerPrep/enterBossPrep — so combat just starts moving/attacking.
     hero.atkTimer = 0;
+    hero.moveProgress = 0;
     hero.poisonStacks = 0;
     hero.plaguedDmgRef = 0;
     hero.decoy = null;
@@ -1989,6 +2249,8 @@
                           // deficit) over from the last one
     smokeZones = [];
     heroTargetId = null;
+    combatStats = { dealt: {}, taken: {} };
+    heroStance = 'advance';
     phase = 'combat';
     log(`Encounter begins: ${chosenEncounter.desc}`, 'wave');
     renderAll();
@@ -2092,9 +2354,14 @@
 
   // ---------------- Rendering ----------------
   function renderTopbar() {
+    // heroStance resets to 'advance' every fight (see startFight) even if the player left it on
+    // Hold last time — resync the button highlight here rather than only on click, so the UI
+    // never silently disagrees with the actual state after a new fight starts.
+    document.querySelectorAll('.stanceBtn').forEach(b => b.classList.toggle('active', b.dataset.stance === heroStance));
     document.getElementById('floorNum').textContent = floor;
     document.getElementById('waveNum').textContent = wave;
     document.getElementById('goldAmt').textContent = gold;
+    document.getElementById('goldAmtTop').textContent = gold;
     document.getElementById('bestWave').textContent = bestWave;
     document.getElementById('essenceAmt').textContent = legacy.essence;
     const startBtn = document.getElementById('startWaveBtn');
@@ -2130,6 +2397,8 @@
     setStatRow('statRowThorns', 'thorns', Math.round(s.thornsPct * 100) + '%');
     setStatRow('statRowDodge', 'dodge', Math.round(s.dodgeChance * 100) + '%');
     renderAbilitiesPanel();
+    renderSetupAbilitiesPanel();
+    renderTerrainKeyPanel();
   }
 
   // Read-only "what's actually active right now" reference, always visible regardless of
@@ -2169,6 +2438,142 @@
       row.innerHTML = `
         <div class="abilityName">${t.icon} ${t.name}</div>
         <div class="abilityBarOuter"><div class="abilityBarInner" style="width:${pct}%"></div></div>`;
+      el.appendChild(row);
+    });
+  }
+
+  // Only lists terrain types actually present in terrainFeatures for the current fight, not every
+  // TERRAIN_TYPES entry — so a future large terrain palette doesn't dump every possible type into
+  // the key at once, just the ones the player actually has to deal with right now.
+  function renderTerrainKeyPanel() {
+    const el = document.getElementById('terrainKeyPanel');
+    const presentTypes = TERRAIN_TYPE_IDS.filter(id => terrainFeatures.some(f => f.type === id));
+    if (!presentTypes.length) {
+      el.innerHTML = '<span class="empty">No terrain in this fight.</span>';
+      return;
+    }
+    el.innerHTML = '';
+    presentTypes.forEach(id => {
+      const def = TERRAIN_TYPES[id];
+      const row = document.createElement('div');
+      row.className = 'terrainKeyRow';
+      row.title = def.keyDesc;
+      row.innerHTML = `<span class="terrainKeySwatch swatch-${id}"></span><span>${def.name}</span>`;
+      el.appendChild(row);
+    });
+  }
+
+  // Ice Wall placement — entering/leaving placement mode never touches the already-committed
+  // iceWallHexes, so a mid-placement Cancel always leaves whatever was placed before intact.
+  function beginWallPlacement() {
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
+    pendingWallHexes = [];
+    placingSetupId = 'icewall';
+    renderAll();
+  }
+  function acceptWallPlacement() {
+    if (!pendingWallHexes.length) return;
+    // Guard against the exact softlock Nate reported: an Ice Wall placed such that it seals an
+    // enemy off from the hero entirely (no path exists either direction, so neither can ever
+    // reach attack range of the other and the fight can never end). Checked against every OTHER
+    // currently-blocking hex too (random Chasm terrain), not just the wall itself, since a wall
+    // segment that only LOOKS safe in isolation could still complete a seal a Chasm started.
+    // Reject rather than silently reshape the player's chosen selection — pendingWallHexes stays
+    // intact so they can just pick a different shape instead of losing their work.
+    const chasmBlocking = terrainFeatures.filter(f => TERRAIN_TYPES[f.type].blocksMovement).map(f => f.hex);
+    if (!keepsBoardConnected(heroHex, queue.map(e => e.hex), [...chasmBlocking, ...pendingWallHexes])) {
+      log('That wall would seal an enemy off completely — try a different shape or spot.', 'crit');
+      return;
+    }
+    iceWallHexes = pendingWallHexes.slice();
+    pendingWallHexes = [];
+    placingSetupId = null;
+    log(`Ice Wall placed across ${iceWallHexes.length} hex${iceWallHexes.length > 1 ? 'es' : ''}.`, 'wave');
+    renderAll();
+  }
+  function cancelWallPlacement() {
+    pendingWallHexes = [];
+    placingSetupId = null;
+    renderAll();
+  }
+
+  function renderSetupAbilitiesPanel() {
+    const el = document.getElementById('setupAbilitiesPanel');
+    const owned = SETUP_TALISMAN_IDS.filter(id => isEquipped(id));
+    if (!owned.length) {
+      el.innerHTML = '<span class="empty">No setup abilities yet — some talismans grant one.</span>';
+      return;
+    }
+    const canPlace = phase === 'prepping' || phase === 'beginnerPrep';
+    el.innerHTML = '';
+    owned.forEach(id => {
+      const t = TALISMANS.find(x => x.id === id);
+      const row = document.createElement('div');
+      row.className = 'setupAbilityRow';
+
+      const label = document.createElement('div');
+      label.className = 'setupAbilityName';
+      label.title = t.desc;
+      label.textContent = `${t.icon} ${t.name}`;
+      row.appendChild(label);
+
+      const controls = document.createElement('div');
+      controls.className = 'setupAbilityControls';
+
+      if (id === 'icewall') {
+        if (placingSetupId === 'icewall') {
+          const hint = document.createElement('span');
+          hint.className = 'setupHint';
+          hint.textContent = `${pendingWallHexes.length}/3 hexes — click connected open hexes`;
+          controls.appendChild(hint);
+          const acceptBtn = document.createElement('button');
+          acceptBtn.textContent = 'Accept';
+          acceptBtn.disabled = !pendingWallHexes.length;
+          acceptBtn.addEventListener('click', acceptWallPlacement);
+          controls.appendChild(acceptBtn);
+          const cancelBtn = document.createElement('button');
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.addEventListener('click', cancelWallPlacement);
+          controls.appendChild(cancelBtn);
+        } else {
+          const status = document.createElement('span');
+          status.className = 'setupStatus';
+          status.textContent = iceWallHexes.length ? `Placed (${iceWallHexes.length} hex${iceWallHexes.length > 1 ? 'es' : ''})` : 'Not placed';
+          controls.appendChild(status);
+          if (canPlace) {
+            const btn = document.createElement('button');
+            btn.textContent = iceWallHexes.length ? 'Re-place' : 'Place';
+            btn.addEventListener('click', beginWallPlacement);
+            controls.appendChild(btn);
+          }
+        }
+      }
+
+      if (id === 'beartrap') {
+        if (placingSetupId === 'beartrap') {
+          const hint = document.createElement('span');
+          hint.className = 'setupHint';
+          hint.textContent = 'Click an open hex…';
+          controls.appendChild(hint);
+          const cancelBtn = document.createElement('button');
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.addEventListener('click', () => { placingSetupId = null; renderAll(); });
+          controls.appendChild(cancelBtn);
+        } else {
+          const status = document.createElement('span');
+          status.className = 'setupStatus';
+          status.textContent = beartrapHex ? 'Placed' : 'Not placed';
+          controls.appendChild(status);
+          if (canPlace) {
+            const btn = document.createElement('button');
+            btn.textContent = beartrapHex ? 'Re-place' : 'Place';
+            btn.addEventListener('click', () => { placingSetupId = 'beartrap'; renderAll(); });
+            controls.appendChild(btn);
+          }
+        }
+      }
+
+      row.appendChild(controls);
       el.appendChild(row);
     });
   }
@@ -2290,7 +2695,7 @@
       const chip = document.createElement('span');
       const active = hero.equippedWeapon === id;
       chip.className = 'talismanChip slotChip' + (active ? ' equippedWeapon' : '');
-      chip.title = `${w.role} (range ${ROLE_RANGE[w.role]})`;
+      chip.title = weaponTooltip(id);
       chip.textContent = `${w.icon} ${w.name} Lvl ${hero.weapons[id].level}${active ? ' (equipped)' : ''}`;
       if (!active) chip.addEventListener('click', () => equipWeapon(id));
       weaponWrap.appendChild(chip);
@@ -2785,6 +3190,154 @@
     ctx.restore();
   }
 
+  // Ice Wall (permanent for the fight, no timer) and Bear Trap — drawn whenever they have
+  // anything to show, during prep (so placement is visible while you're setting it up) and
+  // combat alike. pendingWallHexes gets a lighter/dashed treatment so an in-progress selection
+  // reads as distinct from the already-committed wall.
+  function drawSetupAbilities() {
+    const drawHexFill = (h, fillStyle, strokeStyle, dashed) => {
+      const p = hexPixelPos(h.row, h.idx);
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 180) * 60 * i;
+        const x = p.x + HEX_RADIUS * Math.cos(angle), y = p.y + HEX_RADIUS * Math.sin(angle);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = fillStyle;
+      ctx.fill();
+      if (strokeStyle) {
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = 2;
+        ctx.setLineDash(dashed ? [4, 4] : []);
+        ctx.stroke();
+      }
+    };
+    if (iceWallHexes.length) {
+      ctx.save();
+      iceWallHexes.forEach(h => drawHexFill(h, 'rgba(120,200,255,0.45)', 'rgba(200,240,255,0.9)', false));
+      ctx.restore();
+    }
+    if (pendingWallHexes.length) {
+      ctx.save();
+      pendingWallHexes.forEach(h => drawHexFill(h, 'rgba(120,200,255,0.2)', 'rgba(200,240,255,0.6)', true));
+      ctx.restore();
+    }
+    if (beartrapHex) {
+      const p = hexPixelPos(beartrapHex.row, beartrapHex.idx);
+      ctx.save();
+      ctx.font = '20px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u{1FAA4}', p.x, p.y);
+      ctx.restore();
+    }
+  }
+
+  function hexPathAt(p) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 180) * 60 * i;
+      const x = p.x + HEX_RADIUS * Math.cos(angle), y = p.y + HEX_RADIUS * Math.sin(angle);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  // A pit, not a wall — dark center fading to a lighter rim (fake depth via a radial gradient)
+  // reads as "you can see into it" rather than "this blocks your view," matching how Chasm only
+  // blocks movement, not LOS. The gradient is also the natural hook for a future Shove ability:
+  // a unit pushed in could shrink/fade toward this same center point as it "falls."
+  function drawChasmHex(p) {
+    const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, HEX_RADIUS);
+    grad.addColorStop(0, '#08080a');
+    grad.addColorStop(1, '#302f38');
+    hexPathAt(p);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Debris — a brown/grey rubble base with a couple of fixed (never randomized per-frame, or
+  // it'd flicker) rock speckles for texture, plus one decorative flourish rolled once at
+  // generation time (see DEBRIS_DETAILS/generateTerrainForEncounter). Purely cosmetic — the
+  // slow-movement/slow-attack effect lives entirely in TERRAIN_TYPES.debris.
+  const DEBRIS_ROCK_OFFSETS = [[-9, -5], [7, -8], [-5, 7], [9, 5], [0, -1]];
+  function drawDebrisHex(p, detail) {
+    hexPathAt(p);
+    ctx.fillStyle = '#5c4a3a';
+    ctx.fill();
+    ctx.fillStyle = 'rgba(90,80,70,0.6)';
+    DEBRIS_ROCK_OFFSETS.forEach(([dx, dy]) => {
+      ctx.beginPath();
+      ctx.arc(p.x + dx, p.y + dy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.strokeStyle = '#8a8a90';
+    ctx.fillStyle = '#3a3a40';
+    ctx.lineWidth = 2;
+    if (detail === 'sword') {
+      ctx.beginPath();
+      ctx.moveTo(-10, 10);
+      ctx.lineTo(8, -10);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(1, -3);
+      ctx.lineTo(5, 1);
+      ctx.stroke();
+    } else if (detail === 'shield') {
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 8, 10, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (detail === 'barrel') {
+      ctx.beginPath();
+      ctx.rect(-7, -8, 14, 16);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-7, -3); ctx.lineTo(7, -3);
+      ctx.moveTo(-7, 3); ctx.lineTo(7, 3);
+      ctx.stroke();
+    }
+    ctx.restore();
+    hexPathAt(p);
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Fog Patch — a paler, cooler mist than Smoke Screen's warmer grey haze, and deliberately
+  // motionless (it just sits there all fight, unlike Smoke Screen's timed zone). Stroked with
+  // its own visible border (unlike a plain fill) so a fog
+  // hex reads as its own clearly-bounded tile even sitting right next to a much darker Chasm —
+  // without one, the semi-transparent fill blends into a neighboring dark hex and looks like it's
+  // sitting "on top of" it rather than just adjacent (the exact ambiguity Nate reported).
+  function drawFogPatchHex(p) {
+    hexPathAt(p);
+    ctx.fillStyle = 'rgba(225,228,232,0.4)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(225,228,232,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  function drawTerrainFeatures() {
+    if (!terrainFeatures.length) return;
+    ctx.save();
+    terrainFeatures.forEach(f => {
+      const p = hexPixelPos(f.hex.row, f.hex.idx);
+      if (f.type === 'chasm') drawChasmHex(p);
+      else if (f.type === 'debris') drawDebrisHex(p, f.detail);
+      else if (f.type === 'fogpatch') drawFogPatchHex(p);
+    });
+    ctx.restore();
+  }
+
   // The margin beside the hex board (plenty of it — the board doesn't fill the canvas width)
   // used for a simple always-visible readout of what's actually affecting this fight, since
   // affixes otherwise only ever showed up on the pre-fight choice card and then disappeared.
@@ -2861,7 +3414,9 @@
     ctx.fillStyle = '#23232b';
     ctx.fillRect(0, 0, W, H);
     drawHexGrid();
+    drawTerrainFeatures();
     drawSmokeZones();
+    drawSetupAbilities();
     if (phase === 'combat') { drawTargetHighlight(); drawSideHUD(); }
 
     // Hero — shake is a small random jitter (reaction to being hit); lunge is a smooth forward
@@ -3051,12 +3606,28 @@
   // up directly behind another, since neither of its sideways neighbors looked like an
   // improvement on their own even though stepping sideways then forward would have gotten it
   // there. Shared by enemies pathing toward the hero and the hero pathing toward its target.
-  function findStepToward(fromHex, toHex, range, occupied) {
+  // extraGoalCheck (optional) lets a caller narrow "in range" further — e.g. requiring line of
+  // sight too (see hasLineOfSight below) — without every caller needing to know or care about it.
+  // allowFallback (default true) controls whether a failed search falls back to the closest-
+  // reachable-hex-to-target (see below) or just returns null on a strict miss. Callers that try
+  // a "nicer" occupied set first (e.g. one that also avoids Debris for smart unit types) pass
+  // false so a fallback hit there doesn't mask a real miss and skip the plain-occupied retry —
+  // the fallback is meant to be the LAST resort, not something a preferential first attempt eats.
+  function findStepToward(fromHex, toHex, range, occupied, extraGoalCheck, allowFallback) {
+    if (allowFallback === undefined) allowFallback = true;
     const startKey = hexKey(fromHex.row, fromHex.idx);
     const cameFrom = new Map(); // hexKey -> parent hexKey
     const visited = new Set([startKey]);
     let frontier = [fromHex];
     let goalKey = null;
+
+    // Fallback target: the closest reachable hex to toHex, tracked in case no hex ever satisfies
+    // the real goal (range + extraGoalCheck) — e.g. every hex actually in range is occupied by
+    // another unit standing between this one and its target. Without this, a unit in that spot
+    // just froze in place forever (Nate's reported bug: two melee enemies, a 1-hex gap, the back
+    // one never advances). Only improves on the unit's CURRENT distance, so a unit already at
+    // the best reachable spot correctly does nothing instead of shuffling pointlessly.
+    let bestKey = null, bestDist = hexDistance(fromHex, toHex);
 
     while (frontier.length && !goalKey) {
       const next = [];
@@ -3067,14 +3638,17 @@
           if (visited.has(k) || occupied.has(k)) continue;
           visited.add(k);
           cameFrom.set(k, hexK);
-          if (hexDistance(n, toHex) <= range) { goalKey = k; break; }
+          if (hexDistance(n, toHex) <= range && (!extraGoalCheck || extraGoalCheck(n))) { goalKey = k; break; }
+          const d = hexDistance(n, toHex);
+          if (d < bestDist) { bestDist = d; bestKey = k; }
           next.push(n);
         }
         if (goalKey) break;
       }
       frontier = next;
     }
-    if (!goalKey) return null; // no reachable in-range hex — fully boxed in this tick
+    if (!goalKey && allowFallback) goalKey = bestKey;
+    if (!goalKey) return null; // truly boxed in (or a strict attempt with allowFallback:false that missed)
 
     let curKey = goalKey, parentKey = cameFrom.get(curKey);
     while (parentKey !== startKey) { curKey = parentKey; parentKey = cameFrom.get(curKey); }
@@ -3082,38 +3656,201 @@
     return { row, idx };
   }
 
-  // Same BFS-first-step shape as findStepToward, but the goal is "any hex not currently
-  // smoked" instead of "within range of a target" — used to make smoked enemies flee the haze
-  // (see triggerSmokeScreen/isHexSmoked) rather than advance on the hero.
-  function findStepAwayFromSmoke(fromHex, occupied) {
-    const startKey = hexKey(fromHex.row, fromHex.idx);
-    const cameFrom = new Map();
-    const visited = new Set([startKey]);
-    let frontier = [fromHex];
-    let goalKey = null;
+  // ---------------- Terrain model ----------------
+  // Every terrain effect (Ice Wall, Smoke Screen, and whatever gets added later — Fire Patch,
+  // rubble, difficult ground, elevated hexes...) funnels through this one query instead of
+  // movement/attack code needing to know each terrain type by name. Adding a new terrain effect
+  // means extending terrainAt (and, if it blocks movement, terrainBlockingHexes below) — NOT
+  // touching resolveEnemyMovement/resolveHeroMovement/simulationStep's
+  // attack loops again, which is exactly the trap Ice Wall and Smoke Screen fell into the first
+  // time around (each one independently patched occupied-set construction, LOS, attack-gating,
+  // and movement in 2-3 separate places, which is also how both of Smoke Screen's real bugs
+  // slipped through — a spot that should have checked "is this terrain-affected" didn't).
+  //
+  // Only the axes something actually uses today are wired up (blocksMovement/blocksLOS from Ice
+  // Wall, speedMult/blocksAttack from Smoke Screen, speedMult/atkSpeedMult from Debris) — add new
+  // axes (dps, hps, rangeBonus, ...) when a terrain type that needs them actually gets built, not
+  // speculatively.
+  //
+  // Random terrain (Chasm/Fog Patch/Debris, see terrainFeatures) is symmetric by design — it
+  // affects the hero exactly like it affects enemies, since it's passive environment, not a
+  // player-cast tool. Smoke Screen and Bear Trap stay enemies-only on purpose (see their
+  // descriptions) — they're offensive abilities, not terrain, and this function never touches
+  // hero.hp/hero-only state to enforce that; it only ever reports what's true of the hex itself.
+  function terrainAt(hex) {
+    const t = { blocksMovement: false, blocksLOS: false, speedMult: 1, blocksAttack: false, atkSpeedMult: 1 };
+    if (iceWallHexes.some(h => h.row === hex.row && h.idx === hex.idx)) {
+      t.blocksMovement = true;
+      t.blocksLOS = true;
+    }
+    if (isHexSmoked(hex)) {
+      // Pure debuff, no repositioning override (Nate's explicit call): a smoked enemy just paths
+      // toward the hero exactly like normal, whether that means stepping out the near side or
+      // walking straight through the cloud — it only loses the ability to attack and half its
+      // speed while inside. Used to force a flee-away-from-hero step instead; that produced a
+      // real bug at a chokepoint (smoke placed so the only route to the hero doubled back through
+      // it), where an enemy would flee out the far side and then just sit there, since it could
+      // never re-approach without re-entering the terrain it was fleeing.
+      t.speedMult = Math.min(t.speedMult, SMOKE_SLOW_MULT);
+      t.blocksAttack = true;
+    }
+    const feature = terrainFeatures.find(f => f.hex.row === hex.row && f.hex.idx === hex.idx);
+    if (feature) {
+      const def = TERRAIN_TYPES[feature.type];
+      if (def.blocksMovement) t.blocksMovement = true;
+      if (def.blocksLOS) t.blocksLOS = true;
+      if (def.speedMult !== undefined) t.speedMult = Math.min(t.speedMult, def.speedMult);
+      if (def.atkSpeedMult !== undefined) t.atkSpeedMult = Math.min(t.atkSpeedMult, def.atkSpeedMult);
+    }
+    return t;
+  }
 
-    while (frontier.length && !goalKey) {
+  // Every hex that currently blocks movement — used to seed the `occupied` set in both movement
+  // functions, to keep setup-ability placement off of it, and (via onBoardClick) to keep the
+  // player from relocating the hero onto one during prep. A future movement-blocking terrain
+  // type adds its hex list here, not to resolveEnemyMovement/resolveHeroMovement directly.
+  function terrainBlockingHexes() {
+    return [...iceWallHexes, ...terrainFeatures.filter(f => TERRAIN_TYPES[f.type].blocksMovement).map(f => f.hex)];
+  }
+
+  // Every Debris hex — Debris is walkable, so this isn't for the base occupied set, only for the
+  // "smart" pathing pass below, which treats it as if it were blocked so route-finding naturally
+  // detours around it when a detour exists at all.
+  function debrisHexes() {
+    return terrainFeatures.filter(f => f.type === 'debris').map(f => f.hex);
+  }
+
+  // BFS reachability check — only ever needed for movement-blocking terrain (Chasm today), since
+  // nothing else can make a hex unreachable. Used exclusively by generateTerrainForEncounter to
+  // guarantee every enemy stays reachable from the hero no matter how much random terrain rolls.
+  function keepsBoardConnected(fromHex, targetHexes, blockedHexes) {
+    const blocked = new Set(blockedHexes.map(h => hexKey(h.row, h.idx)));
+    const visited = new Set([hexKey(fromHex.row, fromHex.idx)]);
+    let frontier = [fromHex];
+    while (frontier.length) {
       const next = [];
       for (const hex of frontier) {
-        const hexK = hexKey(hex.row, hex.idx);
         for (const n of neighborsOf(hex.row, hex.idx)) {
           const k = hexKey(n.row, n.idx);
-          if (visited.has(k) || occupied.has(k)) continue;
+          if (visited.has(k) || blocked.has(k)) continue;
           visited.add(k);
-          cameFrom.set(k, hexK);
-          if (!isHexSmoked(n)) { goalKey = k; break; }
           next.push(n);
         }
-        if (goalKey) break;
       }
       frontier = next;
     }
-    if (!goalKey) return null; // boxed in — every reachable hex is still smoked or occupied
+    return targetHexes.every(h => visited.has(hexKey(h.row, h.idx)));
+  }
 
-    let curKey = goalKey, parentKey = cameFrom.get(curKey);
-    while (parentKey !== startKey) { curKey = parentKey; parentKey = cameFrom.get(curKey); }
-    const [row, idx] = curKey.split(',').map(Number);
-    return { row, idx };
+  // Random battlefield terrain — rolled fresh for every combat encounter (see choosePath/
+  // enterBeginnerPrep/enterBossPrep, right after the enemy queue is built) so it's always at
+  // least some terrain, never none: total coverage is a random 20-50% of the board's 45 hexes,
+  // mixing all 3 types freely hex-by-hex (Nate's explicit call — "that'll be exciting, we can
+  // scale back or up as needed"). Never placed under the hero or any enemy's starting hex,
+  // regardless of type — may reconsider for Fog Patch specifically later since it doesn't block
+  // anything, not for now.
+  function generateTerrainForEncounter() {
+    const occupiedHexes = new Set([hexKey(heroHex.row, heroHex.idx)]);
+    queue.forEach(e => occupiedHexes.add(hexKey(e.hex.row, e.hex.idx)));
+    const eligible = allHexes().filter(h => !occupiedHexes.has(hexKey(h.row, h.idx)));
+    for (let i = eligible.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [eligible[i], eligible[j]] = [eligible[j], eligible[i]];
+    }
+    const pct = 0.20 + Math.random() * 0.30;
+    const targetCount = Math.min(eligible.length, Math.round(allHexes().length * pct));
+    const chosen = eligible.slice(0, targetCount);
+    const enemyHexes = queue.map(e => e.hex);
+
+    const features = [];
+    const chasmSoFar = [];
+    chosen.forEach(hex => {
+      const typeId = TERRAIN_TYPE_IDS[Math.floor(Math.random() * TERRAIN_TYPE_IDS.length)];
+      if (TERRAIN_TYPES[typeId].blocksMovement) {
+        // Only commit as a blocker if every enemy stays reachable from the hero — otherwise
+        // fall back to a non-blocking type so the promised density isn't quietly reduced.
+        if (keepsBoardConnected(heroHex, enemyHexes, [...chasmSoFar, hex])) {
+          chasmSoFar.push(hex);
+          features.push({ hex, type: typeId });
+        } else {
+          const fallback = ['fogpatch', 'debris'][Math.floor(Math.random() * 2)];
+          features.push({ hex, type: fallback });
+        }
+      } else if (typeId === 'debris') {
+        features.push({ hex, type: typeId, detail: DEBRIS_DETAILS[Math.floor(Math.random() * DEBRIS_DETAILS.length)] });
+      } else {
+        features.push({ hex, type: typeId });
+      }
+    });
+    return features;
+  }
+
+  // Every unit has its own base movement speed now (hexes/second — moveSpeed/HERO_MOVE_SPEED),
+  // not just "1 hex per tick" — this accumulates simDt*moveSpeed*terrain.speedMult each tick and
+  // only actually takes a step once it reaches a full hex's worth of progress, carrying over any
+  // remainder (same shape as atkTimer/atkInterval). Replaces an earlier 50%-toggle version that
+  // could only ever represent exactly half speed; this handles any speed value, and composes
+  // terrain slowdown (Debris, Smoke Screen) with a unit's own pace multiplicatively. Shared by
+  // enemy movement's approach pass and the hero's own movement, since terrain is symmetric.
+  function advanceMoveProgress(unit, terrain, simDt) {
+    unit.moveProgress += simDt * unit.moveSpeed * terrain.speedMult;
+    if (unit.moveProgress < 1) return false;
+    unit.moveProgress -= 1;
+    return true;
+  }
+
+  // Mirrors terrainBlockingHexes — every hex currently blocking LOS, so
+  // hasLineOfSight's fast path can skip the real check when NOTHING blocks sight, without that
+  // fast path needing to know Ice Wall isn't the only blocksLOS source anymore (Fog Patch too).
+  function terrainBlockingLOSHexes() {
+    return [...iceWallHexes, ...terrainFeatures.filter(f => TERRAIN_TYPES[f.type].blocksLOS).map(f => f.hex)];
+  }
+
+  // Line of sight — blocked today by Ice Wall and Fog Patch (both via terrainAt's blocksLOS),
+  // and the check itself is generic so a future blocksLOS source needs zero changes here. This
+  // grid's row/idx scheme has no clean cube-coordinate
+  // form (columns alternate 7/6 tall, not a uniform doubled offset), so instead of grid-native
+  // line-drawing this samples the actual pixel-space line between the two hex CENTERS at each
+  // hex-distance step in between — the same "nearest center wins, board's small enough to not
+  // need exact math" approach hexAt already uses for click detection.
+  //
+  // Ties are resolved in the DEFENDER's favor (Nate's explicit call, mirroring the Spear's
+  // piercing ambiguity rule): a sample point counts as every hex within a small tolerance of the
+  // true nearest center, not just the single closest one, so a shot running exactly along a
+  // shared edge is blocked if EITHER candidate hex blocks LOS.
+  const LOS_TIE_EPSILON = HEX_RADIUS * 0.05;
+
+  function hexesBetween(fromHex, toHex) {
+    const d = hexDistance(fromHex, toHex);
+    if (d <= 1) return []; // adjacent (or the same hex) — nothing can ever stand between them
+    const p1 = hexPixelPos(fromHex.row, fromHex.idx);
+    const p2 = hexPixelPos(toHex.row, toHex.idx);
+    const all = allHexes();
+    const seen = new Set();
+    const between = [];
+    for (let i = 1; i < d; i++) {
+      const t = i / d;
+      const px = p1.x + (p2.x - p1.x) * t;
+      const py = p1.y + (p2.y - p1.y) * t;
+      let minDist = Infinity;
+      all.forEach(h => {
+        const hp = hexPixelPos(h.row, h.idx);
+        minDist = Math.min(minDist, Math.hypot(hp.x - px, hp.y - py));
+      });
+      all.forEach(h => {
+        const hp = hexPixelPos(h.row, h.idx);
+        if (Math.hypot(hp.x - px, hp.y - py) <= minDist + LOS_TIE_EPSILON) {
+          const k = hexKey(h.row, h.idx);
+          if (!seen.has(k)) { seen.add(k); between.push(h); }
+        }
+      });
+    }
+    return between;
+  }
+
+  function hasLineOfSight(fromHex, toHex) {
+    if (!terrainBlockingLOSHexes().length) return true; // fast path — nothing currently blocks LOS at all
+    return !hexesBetween(fromHex, toHex).some(h => terrainAt(h).blocksLOS);
   }
 
   // Every unit farther than its role's range steps toward the hero — closer units move first
@@ -3123,55 +3860,54 @@
   // up (it's what's standing where they last saw the hero), otherwise the hero's real hex.
   function aggroHex() { return hero.decoy ? hero.decoy.hex : heroHex; }
 
-  function resolveEnemyMovement() {
+  function resolveEnemyMovement(simDt) {
     const target = aggroHex();
     const occupied = new Set([hexKey(heroHex.row, heroHex.idx)]);
     if (hero.decoy) occupied.add(hexKey(hero.decoy.hex.row, hero.decoy.hex.idx));
     queue.forEach(e => occupied.add(hexKey(e.hex.row, e.hex.idx)));
+    // Any terrain that blocks movement (Ice Wall today) goes into the base occupied set so
+    // approach pathing routes around it automatically. A future blocking terrain type extends
+    // terrainBlockingHexes, not this function. Smoke Screen never blocks movement — a smoked
+    // enemy is willing to walk straight through the cloud if that's the way to the hero (Nate's
+    // explicit call: it's a pure debuff, not a repositioning override).
+    terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx)));
 
     const movable = queue.filter(e => !(e.stunTimer > 0));
 
-    // Snapshot smoked status BEFORE either pass moves anything — otherwise an enemy that flees
-    // out of the smoke this tick would immediately read as "not smoked" and get swept up by the
-    // approach pass in the very same tick, canceling its own escape step.
-    const wasSmoked = new Map(movable.map(e => [e, isHexSmoked(e.hex)]));
+    // "Smart" types (see ENEMY_TYPES) route around Debris when a path exists that avoids it
+    // entirely, falling back to the plain occupied set (walking straight through) if avoiding it
+    // leaves no route at all — same "try the nicer set first, fall back if that's impossible"
+    // shape already used for terrain-blocking/LOS elsewhere. "Mindless" types never get this
+    // set — they always use the plain occupied set and bull through Debris regardless.
+    const debrisAvoidingOccupied = new Set(occupied);
+    debrisHexes().forEach(h => debrisAvoidingOccupied.add(hexKey(h.row, h.idx)));
 
-    // Smoked enemies flee the haze instead of approaching — resolved first so both groups draw
-    // from the same occupied set and never claim the same hex. smokeStepReady toggles every
-    // tick so a fleeing enemy only actually steps every other tick (SMOKE_SLOW_MULT = 50% speed).
-    movable.filter(e => wasSmoked.get(e)).forEach(e => {
-      e.smokeStepReady = !e.smokeStepReady;
-      if (!e.smokeStepReady) return;
-      const step = findStepAwayFromSmoke(e.hex, occupied);
-      if (step) {
-        occupied.delete(hexKey(e.hex.row, e.hex.idx));
-        e.hex = step;
-        occupied.add(hexKey(step.row, step.idx));
-      }
-    });
-
-    // Approaching enemies route around active smoke patches rather than straight through them —
-    // otherwise an enemy that just fled the haze immediately paths right back into it (the
-    // shortest route to the hero often cuts through the same hexes it was just fleeing),
-    // producing an endless flee/re-enter loop instead of ever actually reaching the hero.
-    // Falls back to the un-avoiding occupied set if smoke fully blocks every route (e.g. the
-    // hero itself is inside the patch), so an enemy is never permanently stuck refusing to move.
-    const smokeAvoidingOccupied = new Set(occupied);
-    smokeZones.forEach(z => z.hexes.forEach(h => smokeAvoidingOccupied.add(hexKey(h.row, h.idx))));
-
+    // Being within role range is no longer enough on its own — a unit that's in range but LOS-
+    // blocked (Ice Wall) still needs to reposition for a clear shot, exactly like being out of
+    // range. Melee is never affected in practice (adjacent hexes have no hex "between" them for
+    // a wall to occupy — see hexesBetween's d<=1 short-circuit).
     movable
-      .filter(e => !wasSmoked.get(e))
       .map(e => ({ e, dist: hexDistance(e.hex, target) }))
-      .filter(({ e, dist }) => dist > ROLE_RANGE[e.role])
+      .filter(({ e, dist }) => dist > ROLE_RANGE[e.role] || !hasLineOfSight(e.hex, target))
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
       .forEach(({ e }) => {
-        const step = findStepToward(e.hex, target, ROLE_RANGE[e.role], smokeAvoidingOccupied)
-          || findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied);
+        if (!advanceMoveProgress(e, terrainAt(e.hex), simDt)) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
+        const losCheck = n => hasLineOfSight(n, target);
+        const isSmart = ENEMY_TYPES[e.typeId] && ENEMY_TYPES[e.typeId].smart;
+        // Smart units first try to reach TRUE range while avoiding Debris (allowFallback:false —
+        // a fallback hit there would just be "closest reachable hex while avoiding debris," which
+        // could easily be a worse detour than simply walking through it, so it must not count as
+        // success). Only if that strict attempt fails do they fall through to the exact same call
+        // every other unit uses — true range if reachable, else the closest-reachable-hex fallback
+        // (Nate's melee-chokepoint fix) — which is perfectly happy to walk straight through Debris.
+        const step = (isSmart && findStepToward(e.hex, target, ROLE_RANGE[e.role], debrisAvoidingOccupied, losCheck, false))
+          || findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied, losCheck);
         if (step) {
           occupied.delete(hexKey(e.hex.row, e.hex.idx));
-          smokeAvoidingOccupied.delete(hexKey(e.hex.row, e.hex.idx));
+          debrisAvoidingOccupied.delete(hexKey(e.hex.row, e.hex.idx));
           e.hex = step;
           occupied.add(hexKey(step.row, step.idx));
+          debrisAvoidingOccupied.add(hexKey(step.row, step.idx));
         }
       });
   }
@@ -3179,13 +3915,17 @@
   // The hero closes distance to its current sticky target the same way enemies close on the
   // hero — same pathfinding, same obstacle set (every enemy's hex), just aimed the other way.
   // Only moves when there's a live target and it's out of range; never moves for its own sake.
-  function resolveHeroMovement() {
+  function resolveHeroMovement(simDt) {
+    if (heroStance === 'hold') return; // turtling — never auto-approaches until switched back to Advance
     const target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
-    if (hexDistance(heroHex, target.hex) <= s.atkRange) return;
+    if (hexDistance(heroHex, target.hex) <= s.atkRange && hasLineOfSight(heroHex, target.hex)) return;
+    // Terrain is symmetric — Debris slows the hero's own approach exactly like it slows enemies.
+    if (!advanceMoveProgress(hero, terrainAt(heroHex), simDt)) return;
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
-    const step = findStepToward(heroHex, target.hex, s.atkRange, occupied);
+    terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through blocking terrain either
+    const step = findStepToward(heroHex, target.hex, s.atkRange, occupied, n => hasLineOfSight(n, target.hex));
     if (step) heroHex = step;
   }
 
@@ -3203,6 +3943,38 @@
     return bestDist <= HEX_RADIUS ? best : null;
   }
 
+  // Shared "is this hex free to drop a wall/trap on" check — blocks the hero's own hex, every
+  // enemy hex, and whatever the OTHER setup ability already committed, so Ice Wall and Bear Trap
+  // can never end up sharing a hex.
+  function isHexFreeForSetup(hex) {
+    if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return false;
+    if (heroHex.row === hex.row && heroHex.idx === hex.idx) return false;
+    if (beartrapHex && beartrapHex.row === hex.row && beartrapHex.idx === hex.idx) return false;
+    if (terrainBlockingHexes().some(h => h.row === hex.row && h.idx === hex.idx)) return false;
+    return true;
+  }
+
+  function handleSetupPlacementClick(hex) {
+    if (!isHexFreeForSetup(hex)) return;
+    if (placingSetupId === 'beartrap') {
+      beartrapHex = hex;
+      placingSetupId = null;
+      log('Bear Trap set.', 'wave');
+      renderAll();
+      return;
+    }
+    if (placingSetupId === 'icewall') {
+      if (pendingWallHexes.some(h => h.row === hex.row && h.idx === hex.idx)) return;
+      if (pendingWallHexes.length >= 3) return;
+      // The first hex is free; every hex after that must touch (be hex-adjacent to) at least
+      // one already-selected hex — that's what lets a straight line, an L-bend, or a compact
+      // 3-hex triangle all count as "connected," while a hex off on its own doesn't.
+      if (pendingWallHexes.length > 0 && !pendingWallHexes.some(h => hexDistance(h, hex) === 1)) return;
+      pendingWallHexes.push(hex);
+      renderAll();
+    }
+  }
+
   function onBoardClick(evt) {
     if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
     const canvas = document.getElementById('game');
@@ -3212,7 +3984,9 @@
     const y = (evt.clientY - rect.top) * scaleY;
     const hex = hexAt(x, y);
     if (!hex) return;
+    if (placingSetupId) { handleSetupPlacementClick(hex); return; }
     if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return; // enemies block it
+    if (terrainBlockingHexes().some(h => h.row === hex.row && h.idx === hex.idx)) return; // e.g. a random Chasm blocks it too
     heroHex = hex;
     renderAll();
   }
@@ -3224,8 +3998,16 @@
     const s = computeStats();
 
     if (!currentHeroTarget()) pickHeroTarget();
-    resolveHeroMovement();
-    resolveEnemyMovement();
+    resolveHeroMovement(simDt);
+    resolveEnemyMovement(simDt);
+
+    // Bear Trap — checked right after movement resolves each tick, so it catches whichever
+    // enemy just stepped onto it (or was already standing there). One-shot: beartrapHex is
+    // nulled the instant it fires, so nothing else can trigger the same trap again this fight.
+    if (beartrapHex) {
+      const triggered = queue.find(e => e.hex.row === beartrapHex.row && e.hex.idx === beartrapHex.idx);
+      if (triggered) triggerBearTrap(triggered);
+    }
 
     // Both regen and the poison tick below are gated on queue.length too, not just
     // phase==='combat' — phase stays 'combat' through the post-victory talisman-reward modal
@@ -3250,14 +4032,15 @@
     if (hero.poisonStacks > 0 && queue.length) {
       const poisonDmg = hero.plaguedDmgRef * AFFIXES.plagued.poisonPerStackPct * hero.poisonStacks * simDt;
       hero.hp -= poisonDmg;
+      logDamageTaken('Poison', poisonDmg);
       checkHeroDeath();
     }
 
     // Same "only accumulate attack progress while actually in range" rule enemies use — the
     // hero doesn't get a burst of pent-up attacks the instant it closes the distance either.
     const heroTarget = currentHeroTarget();
-    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= s.atkRange) {
-      hero.atkTimer += simDt;
+    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= s.atkRange && hasLineOfSight(heroHex, heroTarget.hex)) {
+      hero.atkTimer += simDt * terrainAt(heroHex).atkSpeedMult; // e.g. Debris slows the hero's own attacks too
       const heroInterval = 1 / s.atkSpeed;
       while (hero.atkTimer >= heroInterval && phase === 'combat' && queue.length) {
         hero.atkTimer -= heroInterval;
@@ -3289,9 +4072,10 @@
     queue.slice().forEach(enemy => {
       if (phase !== 'combat' || !queue.includes(enemy)) return;
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
-      if (isHexSmoked(enemy.hex)) return; // smoked enemies can't attack until they step out
+      if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
       if (hexDistance(enemy.hex, enemyTarget) > ROLE_RANGE[enemy.role]) return;
-      enemy.atkTimer += simDt;
+      if (!hasLineOfSight(enemy.hex, enemyTarget)) return; // e.g. Ice Wall blocks the shot, not just adjacency
+      enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult; // e.g. Debris slows attacks too, not just movement
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
         enemy.atkTimer -= enemy.atkInterval;
         enemyAttack(enemy);
@@ -3351,6 +4135,7 @@
     document.getElementById('log').innerHTML = '';
     document.getElementById('gameOverModal').classList.add('hidden');
     document.getElementById('talismanModal').classList.add('hidden');
+    document.getElementById('combatSummaryModal').classList.add('hidden');
     document.getElementById('pathPanel').style.display = 'none';
     document.getElementById('game').style.display = '';
     document.getElementById('roomModal').classList.add('hidden');
@@ -3379,6 +4164,12 @@
     btn.addEventListener('click', () => {
       speed = Number(btn.dataset.speed);
       document.querySelectorAll('.speedBtn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+  document.querySelectorAll('.stanceBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      heroStance = btn.dataset.stance;
+      document.querySelectorAll('.stanceBtn').forEach(b => b.classList.toggle('active', b === btn));
     });
   });
   document.querySelectorAll('.tabBtn').forEach(btn => {
