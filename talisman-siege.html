@@ -57,11 +57,8 @@
 
   /* One unified window instead of a combat column + a separate sidebar column — Nate's explicit
      ask: "no more different windows... imagine it's all just one window now with different
-     menus/sections within it." The combat zone now spans the window's full width (previously it
-     had to share horizontal space with a fixed 300px sidebar, which is also what was squeezing
-     the movement/abilities/terrain overlays into overlapping the hex board). */
+     menus/sections within it." */
   #gameWindow { padding: 14px; }
-  #canvasWrap { position: relative; }
   canvas#game {
     background: #23232b;
     display: block;
@@ -69,34 +66,14 @@
     width: 100%;
     box-shadow: 0 0 30px rgba(0,0,0,0.5);
   }
-  /* Floating HUD panels over the combat screen itself, not the sidebar — left side is hero-
-     related (movement, abilities), right side is environment-related (terrain). Percentage
-     positioning tracks the canvas's own aspect-ratio-preserved scaling, and the hex board only
-     ever occupies the horizontal-center band of the canvas (flat-top hex math leaves a wide
-     empty margin on both sides), so these never overlap the actual battlefield. */
-  .combatOverlay {
-    position: absolute;
-    background: rgba(20,20,26,0.85);
-    border: 1px solid #3a3a46;
-    border-radius: 8px;
-    padding: 8px 10px;
-    max-width: 145px;
-    z-index: 5;
-  }
-  .combatOverlay h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; font-weight: 600; }
-  /* Sits between the active-ability cooldown rows and the pre-fight Setup Abilities rows (Ice
-     Wall/Bear Trap placement) once both share this one overlay box (Nate's explicit ask — Setup
-     Abilities used to live in the sidebar, separated from everything else hero-related). */
-  .combatOverlay .overlaySubLabel { margin-top: 8px; padding-top: 6px; border-top: 1px solid #3a3a46; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
-  #abilitiesOverlay { max-width: 175px; }
-  #movementOverlay { left: 10px; bottom: 10px; }
-  #movementOverlay .stanceBtnGroup { display: flex; flex-direction: column; gap: 4px; }
-  #movementOverlay .stanceBtn { width: 100%; }
-  /* Positioned a bit below true vertical-center — the canvas-drawn STATUS readout (see
-     drawSideHUD) already lives in this same left margin starting around 26% down, so this
-     clears its worst case (two status lines) rather than sitting exactly at 50%. */
-  #abilitiesOverlay { left: 10px; top: 47%; }
-  #terrainOverlay { right: 10px; bottom: 10px; }
+  /* Was: floating panels absolute-positioned on top of the canvas, sized to fit whatever margin
+     the hex board happened to leave. Overlapped twice as the surrounding layout's width changed
+     (item 26, then item 27) — a margin that's "probably wide enough" isn't a real guarantee.
+     Movement/Abilities/Terrain are now plain sections in .windowSidebar instead (see the HTML),
+     so overlap is structurally impossible rather than a percentage to keep re-tuning. */
+  .overlaySubLabel { margin-top: 8px; padding-top: 6px; border-top: 1px solid #3a3a46; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
+  .stanceBtnGroup { display: flex; gap: 6px; }
+  .stanceBtnGroup .stanceBtn { flex: 1; }
   /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the rest
      of the window (Hero/Equipped below) stays visible and clickable while choosing, instead of a
      full-screen modal blocking it. min-height roughly matches the canvas's own rendered
@@ -116,14 +93,24 @@
   #log div.entry.wave { color: #7bd88f; font-weight: 600; }
   #log div.entry.death { color: #e06666; font-weight: 600; }
 
-  /* Hero + Equipped sit side by side below the combat zone, sharing #gameWindow's one surface —
-     no separate panel background per section, just a divider line, so it reads as sections of
-     one window rather than stacked boxes. */
-  .windowRow { display: flex; gap: 24px; padding-top: 14px; margin-top: 14px; border-top: 1px solid #2c2c35; flex-wrap: wrap; }
-  .windowRow .windowSection { flex: 1; min-width: 220px; }
-  .windowSection h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
-  #prepPanel.windowSection { padding-top: 14px; margin-top: 14px; border-top: 1px solid #2c2c35; }
-  @media (max-width: 700px) { .windowRow { flex-direction: column; } }
+  /* Two columns inside the one shared #gameWindow surface — the combat zone on the left, and
+     everything that used to be the sidebar (Hero/Equipped/Loadout+Shop) stacked in a column on
+     the right, so a normal wide monitor is used horizontally instead of forcing a long vertical
+     scroll to reach them. No separate panel background per section, just divider lines, so it
+     still reads as sections of one window rather than stacked boxes. */
+  #gameWindow { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .windowMain { flex: 3; min-width: 480px; }
+  .windowSidebar { flex: 1; min-width: 300px; max-width: 380px; }
+  .windowSection h2 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
+  .windowSidebar .windowSection + .windowSection { border-top: 1px solid #2c2c35; padding-top: 10px; margin-top: 10px; }
+  /* Loadout/Shop gets its own full-width row below the canvas+sidebar row instead of squeezing
+     into the narrow sidebar column — it's the tallest section (shop rows + talisman bag), and
+     the extra width lets .prepColumns lay two panes side by side instead of stacking, which is
+     what was pushing the page taller than the viewport (Nate: "I want to see all the important
+     menus without having to scroll down"). flex-basis 100% forces it onto its own line in the
+     wrapping flex row above. */
+  .windowFullWidth { flex: 1 0 100%; border-top: 1px solid #2c2c35; padding-top: 10px; margin-top: 4px; }
+  @media (max-width: 900px) { .windowMain { min-width: 100%; } .windowSidebar { max-width: 100%; } }
   .panel {
     background: #23232b;
     border-radius: 8px;
@@ -194,6 +181,12 @@
   #shopFreezeBtn.active { background: #2a3f5c; border-color: #3d6ecb; color: #a8c8f0; }
   .shopGroupLabel { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b6b78; margin: 10px 0 2px; }
   .shopGroupLabel:first-child { margin-top: 0; }
+  /* Two columns now that Shop has the full window width to work with (see .windowFullWidth) —
+     cuts a 5-row upgrade list down to ~3 visual rows instead of 5, which is most of what was
+     pushing the page taller than the viewport. Headers span both columns so a group still reads
+     as its own row rather than sitting beside an unrelated item from the other group. */
+  #shopPanel { display: grid; grid-template-columns: 1fr 1fr; column-gap: 20px; align-items: start; }
+  #shopPanel .shopGroupLabel { grid-column: 1 / -1; }
   .buyAllBtn { font-size: 10px; padding: 2px 7px; text-transform: none; letter-spacing: normal; }
 
   .slotRow { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
@@ -300,6 +293,8 @@
   .dmgSummaryRow { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: #ccc; padding: 3px 0; border-bottom: 1px solid #2c2c35; }
   .dmgSummaryRow:last-child { border-bottom: none; }
   .dmgSummaryRow span:last-child { color: #fff; font-weight: 600; }
+  .dmgSummaryTotalRow { border-bottom: 1px solid #46465a; margin-bottom: 2px; font-weight: 700; }
+  .dmgSummaryTotalRow span:first-child { color: #eee; }
   /* Uses nth-child rather than first/last-child — this used to be just Dealt/Taken (two
      columns, so first/last worked), but adding a third Healing column would have silently
      shifted "last" onto the wrong one otherwise. Unprefixed so both the victory summary and the
@@ -333,37 +328,26 @@
   <div id="encounterPreview" class="panel" style="display:none"></div>
 
   <div id="gameWindow" class="panel">
-    <div id="canvasWrap">
-      <canvas id="game" width="640" height="420"></canvas>
-      <!-- Left side of the combat screen is hero-related (movement, active abilities); right
-           side is environment-related (terrain key) — mirrors drawSideHUD's own canvas-drawn
-           STATUS (left) / AFFIXES (right) split just below the topbar's stats. -->
-      <div id="movementOverlay" class="combatOverlay">
-        <h3>Movement</h3>
-        <div class="stanceBtnGroup">
-          <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
-          <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
-        </div>
+    <div class="windowMain">
+      <div id="canvasWrap">
+        <canvas id="game" width="640" height="420"></canvas>
       </div>
-      <div id="abilitiesOverlay" class="combatOverlay">
-        <h3>Abilities</h3>
-        <div id="abilitiesPanel"><span class="empty">No abilities yet — some talismans grant one.</span></div>
-        <div class="overlaySubLabel">Setup</div>
-        <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
+      <div id="pathPanel" style="display:none">
+        <h2>Choose Your Next Encounter</h2>
+        <p class="sub" id="pathModalSub">Pick a fight based on what you can handle — and what you want as a reward.</p>
+        <div id="pathCards" class="talismanCards"></div>
       </div>
-      <div id="terrainOverlay" class="combatOverlay">
-        <h3>Terrain</h3>
-        <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
-      </div>
+      <div id="log" style="display:none"></div>
     </div>
-    <div id="pathPanel" style="display:none">
-      <h2>Choose Your Next Encounter</h2>
-      <p class="sub" id="pathModalSub">Pick a fight based on what you can handle — and what you want as a reward.</p>
-      <div id="pathCards" class="talismanCards"></div>
-    </div>
-    <div id="log" style="display:none"></div>
 
-    <div class="windowRow">
+    <!-- Everything that used to be the sidebar (plus Movement/Abilities/Terrain, which used to
+         float as absolute-positioned overlays ON TOP of the canvas) now lives here as normal
+         stacked sections instead — Nate hit the overlay-overlap bug twice as the surrounding
+         layout kept changing width, because "sits in the empty margin of a canvas whose margin
+         width isn't known in advance" can never be guaranteed collision-free. Plain document-flow
+         sections next to the canvas, rather than layered on top of it, can't overlap it by
+         construction — there's nothing left to tune or get wrong as the layout changes further. -->
+    <div class="windowSidebar">
       <div id="heroSection" class="windowSection">
         <h2>Hero</h2>
         <div id="hpBarOuter"><div id="hpBarInner"></div></div>
@@ -379,13 +363,34 @@
         <div class="statRow" id="statRowThorns" style="display:none"><span>Thorns</span><span id="statThorns">-</span></div>
         <div class="statRow" id="statRowDodge" style="display:none"><span>Dodge Chance</span><span id="statDodge">-</span></div>
       </div>
+      <div id="movementSection" class="windowSection">
+        <h2>Movement</h2>
+        <div class="stanceBtnGroup">
+          <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
+          <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
+        </div>
+      </div>
+      <div id="abilitiesSection" class="windowSection">
+        <h2>Abilities</h2>
+        <div id="abilitiesPanel"><span class="empty">No active abilities yet — some talismans grant one.</span></div>
+        <div class="overlaySubLabel">Setup Abilities</div>
+        <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
+      </div>
       <div id="equippedSection" class="windowSection">
         <h2>Equipped</h2>
         <div id="talismansPanel"><span class="empty">Nothing equipped yet.</span></div>
       </div>
+      <div id="terrainSection" class="windowSection">
+        <h2>Terrain</h2>
+        <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
+      </div>
     </div>
 
-    <div id="prepPanel" class="windowSection" style="display:none">
+    <!-- Full width of the window rather than squeezed into the narrow sidebar column — this is
+         the tallest section (shop rows + talisman bag), and the extra horizontal room lets its
+         own internal layout (see .prepColumns below) spread out instead of stacking so tall that
+         the whole page needed to scroll to see it. -->
+    <div id="prepPanel" class="windowFullWidth" style="display:none">
       <p class="prepHint">Adjust your build and shop before starting the fight!</p>
       <div class="tabBar">
         <button class="tabBtn" data-tab="loadout">🎒 Loadout</button>
@@ -474,7 +479,19 @@
 (function() {
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
+  // W/H are the LOGICAL drawing space every hex/unit/effect position in this file is computed
+  // in (captured from the canvas's declared 640x420 attributes) — every existing draw call stays
+  // in this space, untouched. The combat zone now renders much wider than 640 CSS px (see the
+  // full-window layout change), and a 640x420 backing store stretched that far via CSS looked
+  // pixelated — so the actual backing store is bumped to a denser resolution below and the
+  // context is scaled up to match, purely a sharpness fix with zero effect on where anything
+  // is positioned. onBoardClick's click-to-hex math is the one place that reads the canvas
+  // element's resolution directly rather than using W/H — it was updated to match.
   const W = canvas.width, H = canvas.height;
+  const CANVAS_RES_SCALE = 3;
+  canvas.width = W * CANVAS_RES_SCALE;
+  canvas.height = H * CANVAS_RES_SCALE;
+  ctx.scale(CANVAS_RES_SCALE, CANVAS_RES_SCALE);
   const LUNGE_DIST = 16; // px a character lunges toward its target at the moment it attacks
 
   // ---------------- Hex battlefield ----------------
@@ -1557,6 +1574,20 @@
     if (!target) { pickHeroTarget(); return; }
     const s = computeStats();
     if (hexDistance(heroHex, target.hex) <= s.atkRange && hasLineOfSight(heroHex, target.hex)) return; // already engaged — stay locked on
+
+    // Top priority: some OTHER enemy is already within ITS OWN role range + LOS of the hero —
+    // i.e. actively able to attack (or already attacking) — while the current target isn't even
+    // reachable to hit back. Nate's report: the hero stayed locked onto a target it couldn't
+    // touch while a completely different enemy, right next to it, was the one actually landing
+    // hits. Switch immediately rather than running the distance-margin check below, which is
+    // tuned for the slower "my target drifted farther away" case, not "I'm being hit right now."
+    const attacker = queue.find(e => e.id !== target.id &&
+      hexDistance(e.hex, heroHex) <= ROLE_RANGE[e.role] && hasLineOfSight(e.hex, heroHex));
+    if (attacker) { heroTargetId = attacker.id; return; }
+
+    // Otherwise, re-check whether a different enemy has become clearly closer (see item 24's
+    // wall-detour fix) — a margin, not "any closer at all," to avoid flickering between two
+    // enemies converging at a similar pace.
     const targetDist = hexDistance(target.hex, heroHex);
     let best = target, bestDist = targetDist;
     queue.forEach(e => {
@@ -1952,9 +1983,11 @@
   function renderDamageSummaryInto(dealtEl, takenEl, healedEl) {
     const renderList = (el, obj) => {
       const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
-      el.innerHTML = entries.length
-        ? entries.map(([label, amt]) => `<div class="dmgSummaryRow"><span>${label}</span><span>${Math.round(amt)}</span></div>`).join('')
-        : '<span class="empty">None</span>';
+      if (!entries.length) { el.innerHTML = '<span class="empty">None</span>'; return; }
+      const total = entries.reduce((sum, [, amt]) => sum + amt, 0);
+      const totalRow = `<div class="dmgSummaryRow dmgSummaryTotalRow"><span>Total</span><span>${Math.round(total)}</span></div>`;
+      const rows = entries.map(([label, amt]) => `<div class="dmgSummaryRow"><span>${label}</span><span>${Math.round(amt)}</span></div>`).join('');
+      el.innerHTML = totalRow + rows;
     };
     renderList(dealtEl, combatStats.dealt);
     renderList(takenEl, combatStats.taken);
@@ -2530,7 +2563,7 @@
     const el = document.getElementById('abilitiesPanel');
     const owned = Object.keys(ABILITY_CFG).filter(id => isEquipped(id));
     if (!owned.length) {
-      el.innerHTML = '<span class="empty">No abilities yet — some talismans grant one.</span>';
+      el.innerHTML = '<span class="empty">No active abilities yet — some talismans grant one.</span>';
       return;
     }
     el.innerHTML = '';
@@ -4100,9 +4133,10 @@
 
   function onBoardClick(evt) {
     if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
-    const canvas = document.getElementById('game');
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    // Scale into the LOGICAL W/H space (see CANVAS_RES_SCALE above) — canvas.width/height are
+    // now the denser backing-store resolution, not the space hexAt/hex math actually operates in.
+    const scaleX = W / rect.width, scaleY = H / rect.height;
     const x = (evt.clientX - rect.left) * scaleX;
     const y = (evt.clientY - rect.top) * scaleY;
     const hex = hexAt(x, y);
