@@ -55,8 +55,12 @@
   #wipeBtn { background: transparent; border-color: #4a2f2f; color: #a06060; font-size: 11px; padding: 5px 9px; }
   #wipeBtn:hover:not(:disabled) { background: #3a1f1f; color: #e08a8a; border-color: #6b3a3a; }
 
-  #main { display: flex; gap: 14px; align-items: flex-start; }
-  #battleArea { flex: 1; min-width: 0; }
+  /* One unified window instead of a combat column + a separate sidebar column — Nate's explicit
+     ask: "no more different windows... imagine it's all just one window now with different
+     menus/sections within it." The combat zone now spans the window's full width (previously it
+     had to share horizontal space with a fixed 300px sidebar, which is also what was squeezing
+     the movement/abilities/terrain overlays into overlapping the hex board). */
+  #gameWindow { padding: 14px; }
   #canvasWrap { position: relative; }
   canvas#game {
     background: #23232b;
@@ -93,34 +97,33 @@
      clears its worst case (two status lines) rather than sitting exactly at 50%. */
   #abilitiesOverlay { left: 10px; top: 47%; }
   #terrainOverlay { right: 10px; bottom: 10px; }
-  /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the
-     sidebar stays visible and clickable while choosing, instead of a full-screen modal blocking
-     it. min-height roughly matches the canvas's own rendered footprint so the log below it
-     doesn't jump around when the two swap. */
+  /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the rest
+     of the window (Hero/Equipped below) stays visible and clickable while choosing, instead of a
+     full-screen modal blocking it. min-height roughly matches the canvas's own rendered
+     footprint so nothing jumps around when the two swap. No background/shadow of its own now —
+     it's nested inside #gameWindow's single shared surface, not a separate box anymore. */
   #pathPanel {
     min-height: 420px;
-    box-shadow: 0 0 30px rgba(0,0,0,0.5);
     overflow-y: auto;
   }
   #pathPanel .talismanCards { margin-top: 16px; }
-  #log {
-    margin-top: 8px;
-    background: #1f1f26;
-    border-radius: 6px;
-    height: 130px;
-    overflow-y: auto;
-    padding: 8px 10px;
-    font-size: 12px;
-    color: #999;
-    line-height: 1.6;
-  }
+  /* Kept in the DOM (log() still writes to it harmlessly) but not shown — Nate's ask, to free up
+     space, was to remove the visible text box, not to touch every log() call site. */
+  #log { display: none; }
   #log div.entry { }
   #log div.entry.crit { color: #f0c14b; }
   #log div.entry.dodge { color: #6bc6ff; }
   #log div.entry.wave { color: #7bd88f; font-weight: 600; }
   #log div.entry.death { color: #e06666; font-weight: 600; }
 
-  #sidebar { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+  /* Hero + Equipped sit side by side below the combat zone, sharing #gameWindow's one surface —
+     no separate panel background per section, just a divider line, so it reads as sections of
+     one window rather than stacked boxes. */
+  .windowRow { display: flex; gap: 24px; padding-top: 14px; margin-top: 14px; border-top: 1px solid #2c2c35; flex-wrap: wrap; }
+  .windowRow .windowSection { flex: 1; min-width: 220px; }
+  .windowSection h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; }
+  #prepPanel.windowSection { padding-top: 14px; margin-top: 14px; border-top: 1px solid #2c2c35; }
+  @media (max-width: 700px) { .windowRow { flex-direction: column; } }
   .panel {
     background: #23232b;
     border-radius: 8px;
@@ -305,11 +308,7 @@
   .dmgSummaryCols .dmgSummaryCol:nth-child(2) .dmgSummaryRow span:last-child { color: #e88; }
   .dmgSummaryCols .dmgSummaryCol:nth-child(3) .dmgSummaryRow span:last-child { color: #7bd88f; }
 
-  @media (max-width: 760px) {
-    #main { flex-direction: column; }
-    #sidebar { width: 100%; }
-  }
-</style>
+  </style>
 </head>
 <body>
 <div id="app">
@@ -333,40 +332,39 @@
 
   <div id="encounterPreview" class="panel" style="display:none"></div>
 
-  <div id="main">
-    <div id="battleArea">
-      <div id="canvasWrap">
-        <canvas id="game" width="640" height="420"></canvas>
-        <!-- Left side of the combat screen is hero-related (movement, active abilities); right
-             side is environment-related (terrain key) — mirrors drawSideHUD's own canvas-drawn
-             STATUS (left) / AFFIXES (right) split just below the topbar's stats. -->
-        <div id="movementOverlay" class="combatOverlay">
-          <h3>Movement</h3>
-          <div class="stanceBtnGroup">
-            <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
-            <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
-          </div>
-        </div>
-        <div id="abilitiesOverlay" class="combatOverlay">
-          <h3>Abilities</h3>
-          <div id="abilitiesPanel"><span class="empty">No abilities yet — some talismans grant one.</span></div>
-          <div class="overlaySubLabel">Setup</div>
-          <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
-        </div>
-        <div id="terrainOverlay" class="combatOverlay">
-          <h3>Terrain</h3>
-          <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
+  <div id="gameWindow" class="panel">
+    <div id="canvasWrap">
+      <canvas id="game" width="640" height="420"></canvas>
+      <!-- Left side of the combat screen is hero-related (movement, active abilities); right
+           side is environment-related (terrain key) — mirrors drawSideHUD's own canvas-drawn
+           STATUS (left) / AFFIXES (right) split just below the topbar's stats. -->
+      <div id="movementOverlay" class="combatOverlay">
+        <h3>Movement</h3>
+        <div class="stanceBtnGroup">
+          <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
+          <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
         </div>
       </div>
-      <div id="pathPanel" class="panel" style="display:none">
-        <h2>Choose Your Next Encounter</h2>
-        <p class="sub" id="pathModalSub">Pick a fight based on what you can handle — and what you want as a reward.</p>
-        <div id="pathCards" class="talismanCards"></div>
+      <div id="abilitiesOverlay" class="combatOverlay">
+        <h3>Abilities</h3>
+        <div id="abilitiesPanel"><span class="empty">No abilities yet — some talismans grant one.</span></div>
+        <div class="overlaySubLabel">Setup</div>
+        <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
       </div>
-      <div id="log"></div>
+      <div id="terrainOverlay" class="combatOverlay">
+        <h3>Terrain</h3>
+        <div id="terrainKeyPanel"><span class="empty">No terrain in this fight.</span></div>
+      </div>
     </div>
-    <div id="sidebar">
-      <div class="panel">
+    <div id="pathPanel" style="display:none">
+      <h2>Choose Your Next Encounter</h2>
+      <p class="sub" id="pathModalSub">Pick a fight based on what you can handle — and what you want as a reward.</p>
+      <div id="pathCards" class="talismanCards"></div>
+    </div>
+    <div id="log" style="display:none"></div>
+
+    <div class="windowRow">
+      <div id="heroSection" class="windowSection">
         <h2>Hero</h2>
         <div id="hpBarOuter"><div id="hpBarInner"></div></div>
         <div class="statRow"><span>HP</span><span id="hpText">100 / 100</span></div>
@@ -381,25 +379,26 @@
         <div class="statRow" id="statRowThorns" style="display:none"><span>Thorns</span><span id="statThorns">-</span></div>
         <div class="statRow" id="statRowDodge" style="display:none"><span>Dodge Chance</span><span id="statDodge">-</span></div>
       </div>
-      <div class="panel">
+      <div id="equippedSection" class="windowSection">
         <h2>Equipped</h2>
         <div id="talismansPanel"><span class="empty">Nothing equipped yet.</span></div>
       </div>
-      <div class="panel" id="prepPanel" style="display:none">
-        <p class="prepHint">Adjust your build and shop before starting the fight!</p>
-        <div class="tabBar">
-          <button class="tabBtn" data-tab="loadout">🎒 Loadout</button>
-          <button class="tabBtn" data-tab="shop">🛒 Shop</button>
+    </div>
+
+    <div id="prepPanel" class="windowSection" style="display:none">
+      <p class="prepHint">Adjust your build and shop before starting the fight!</p>
+      <div class="tabBar">
+        <button class="tabBtn" data-tab="loadout">🎒 Loadout</button>
+        <button class="tabBtn" data-tab="shop">🛒 Shop</button>
+      </div>
+      <div id="loadoutTabContent"></div>
+      <div id="shopTabContent">
+        <div class="shopGoldRow">Gold <b id="goldAmt">0</b></div>
+        <div class="shopControls">
+          <button id="shopFreezeBtn" title="Keep this exact shop for the next prep phase">Freeze Shop</button>
+          <button id="shopRerollBtn" title="Spend gold to reroll all 5 slots right now">Reroll (1g)</button>
         </div>
-        <div id="loadoutTabContent"></div>
-        <div id="shopTabContent">
-          <div class="shopGoldRow">Gold <b id="goldAmt">0</b></div>
-          <div class="shopControls">
-            <button id="shopFreezeBtn" title="Keep this exact shop for the next prep phase">Freeze Shop</button>
-            <button id="shopRerollBtn" title="Spend gold to reroll all 5 slots right now">Reroll (1g)</button>
-          </div>
-          <div id="shopPanel"></div>
-        </div>
+        <div id="shopPanel"></div>
       </div>
     </div>
   </div>
