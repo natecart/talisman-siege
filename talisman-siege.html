@@ -50,7 +50,7 @@
   button.primary { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
   button.primary:hover:not(:disabled) { background: #4a7ad8; }
   button.speedBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
-  button.stanceBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
+  button.stanceBtn.active, button.targetModeBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
   label.chk { font-size: 13px; color: #bbb; display: flex; align-items: center; gap: 4px; cursor: pointer; }
   #wipeBtn { background: transparent; border-color: #4a2f2f; color: #a06060; font-size: 11px; padding: 5px 9px; }
   #wipeBtn:hover:not(:disabled) { background: #3a1f1f; color: #e08a8a; border-color: #6b3a3a; }
@@ -100,6 +100,9 @@
   .overlaySubLabel { margin-top: 5px; padding-top: 4px; border-top: 1px solid #3a3a46; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
   .stanceBtnGroup { display: flex; gap: 6px; }
   .stanceBtnGroup .stanceBtn { flex: 1; }
+  /* 5 targeting-mode buttons don't fit one row at a readable size — wraps into 3+2 instead. */
+  .targetModeBtnGroup { flex-wrap: wrap; }
+  .targetModeBtnGroup .targetModeBtn { flex: 1 1 28%; font-size: 11px; padding: 5px 4px; }
   /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the rest
      of the window (Hero/Equipped below) stays visible and clickable while choosing, instead of a
      full-screen modal blocking it. min-height roughly matches the canvas's own rendered
@@ -386,8 +389,10 @@
         <div id="hpBarOuter"><div id="hpBarInner"></div></div>
         <div class="statRow"><span>HP</span><span id="hpText">100 / 100</span></div>
         <div class="statRow"><span>Damage</span><span id="statDamage">-</span></div>
+        <div class="statRow"><span>Magic</span><span id="statMagic">-</span></div>
         <div class="statRow"><span>Attack Speed</span><span id="statAtkSpeed">-</span></div>
         <div class="statRow"><span>Armor</span><span id="statArmor">-</span></div>
+        <div class="statRow"><span>Potions</span><span id="statPotions">-</span></div>
         <!-- These rows only appear once something has unlocked that stat (see isStatUnlocked) -->
         <div class="statRow" id="statRowDamageReduction" style="display:none"><span>Damage Reduction</span><span id="statDamageReduction">-</span></div>
         <div class="statRow" id="statRowCritChance" style="display:none"><span>Crit Chance</span><span id="statCrit">-</span></div>
@@ -401,6 +406,14 @@
         <div class="stanceBtnGroup">
           <button class="stanceBtn active" data-stance="advance" title="Chase and close distance on your target as normal.">Advance</button>
           <button class="stanceBtn" data-stance="hold" title="Turtle in place — the hero stops approaching (still attacks anything already in range) until you switch back.">Hold</button>
+        </div>
+        <h2>Targeting</h2>
+        <div class="stanceBtnGroup targetModeBtnGroup">
+          <button class="targetModeBtn active" data-target-mode="nearest" title="Always target whichever enemy is closest — re-checked every tick, can swap mid-fight.">Nearest</button>
+          <button class="targetModeBtn" data-target-mode="furthest" title="Always target whichever enemy is farthest away.">Furthest</button>
+          <button class="targetModeBtn" data-target-mode="strongest" title="Always target whichever enemy currently has the most HP.">Strongest</button>
+          <button class="targetModeBtn" data-target-mode="weakest" title="Always target whichever enemy currently has the least HP.">Weakest</button>
+          <button class="targetModeBtn" data-target-mode="random" title="Target a random enemy — re-rolls only when your current target dies, not every tick.">Random</button>
         </div>
       </div>
       <div id="abilitiesSection" class="windowSection">
@@ -644,6 +657,7 @@
     critChance: 'Crit Chance', regen: 'HP Regen', lifesteal: 'Lifesteal', thorns: 'Thorns', dodge: 'Dodge Chance',
     damageReduction: 'Damage Reduction', atkSpeedScaling: 'Attack Speed Scaling',
     dmg: 'Damage', maxHP: 'Max HP', atkSpeed: 'Attack Speed', gold: 'Gold', cooldownReduction: 'Cooldown Reduction', armor: 'Armor', atkRange: 'Attack Range',
+    moveSpeed: 'Movement Speed', magic: 'Magic',
   };
 
   const UPGRADES = [
@@ -654,6 +668,11 @@
     { id: 'atkSpeed',  name: 'Swift Strikes',    desc: '+0.1 Attack Speed',      baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
     { id: 'maxHP',     name: 'Vitality',         desc: '+15 Max HP',             baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
     { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    // Magic is a fully separate stat from Damage — same shape (flat, additive, 10 levels,
+    // identical cost curve) but its own economy, so investing in one never helps the other.
+    // Only the Staff reads it today (see computeStats' scalesOffMagic branch); Fireball and
+    // Magic Missile scale off it too now instead of Damage (see TALISMANS).
+    { id: 'magic',     name: 'Arcane Focus',     desc: '+2 Magic',               baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
 
     // --- Damage Reduction: unlocks once Armor is maxed, the scaling counterpart to Armor ---
     { id: 'ironResolve', name: 'Iron Resolve',   desc: 'Unlock Damage Reduction', baseCost: 20, mult: 1, category: 'archetype', maxLevel: 1, requiresMaxed: 'armor', unlocksStat: 'damageReduction' },
@@ -672,6 +691,7 @@
     smokescreen: { cooldown: 8 },
     fireball: { cooldown: 5.5 },
     hurricane: { cooldown: 9 },
+    magicmissile: { cooldown: 2.5 },
   };
 
   // How long a smoke patch lingers on its hexes once thrown, and how much it slows enemies
@@ -687,6 +707,13 @@
   // hex) simply stops the push for that unit instead.
   const HURRICANE_RADIUS = 2;
   const PUSH_ROTATION_RADIANS = Math.PI / 3; // ~60°, one hex-step's worth of "and over one tile"
+
+  // Potions — a plain gold-bought consumable stockpile, not a talisman: uncapped repeat buys at
+  // a flat price (no per-level cost curve like UPGRADES), heals a flat amount rather than a % of
+  // max HP, and persists across waves within a run (reset only by freshHero, same as everything
+  // else there) since it's spent inventory, not per-fight state.
+  const POTION_COST = 10;
+  const POTION_HEAL_AMOUNT = 25;
 
   // ---------------- Data: random battlefield terrain ----------------
   // Rolled fresh for every combat encounter (see generateTerrainForEncounter) — unlike Ice Wall/
@@ -759,7 +786,7 @@
       triggerType: 'passive', modifies: ['dmg'], scalesWith: ['maxHP'] },
     { id: 'killerinstinct', tier: 'minor', icon: '\u{1F3AF}', name: 'Killer Instinct', desc: '20% Crit Chance. Crits always deal double damage.', unlocksStat: 'critChance',
       triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
-    { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+20% Damage.',
+    { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+10% Damage.',
       triggerType: 'passive', modifies: ['dmg'] },
     { id: 'ironvitality', tier: 'minor', icon: '\u{1F49A}', name: 'Iron Vitality', desc: '+25% Max HP.',
       triggerType: 'passive', modifies: ['maxHP'] },
@@ -787,14 +814,18 @@
       triggerType: 'setup' },
     { id: 'beartrap',    tier: 'minor', type: 'setup', icon: '\u{1FAA4}', name: 'Bear Trap', desc: 'Before the fight, place 1 hex. The first enemy to step on it takes a heavy hit and is rooted for 2s, then it’s spent. Affects enemies only — you can walk over it freely.',
       triggerType: 'setup', scalesWith: ['dmg'] },
-    { id: 'fireball',    tier: 'major', type: 'ability', icon: '\u{2604}\u{FE0F}', name: 'Fireball', desc: `Every ${ABILITY_CFG.fireball.cooldown}s, hurl a fireball at your target for full damage, splashing 25% onto every hex adjacent to it — including you, if you're standing that close.`,
-      triggerType: 'ability', scalesWith: ['dmg'], frequencyGate: 'cooldown' },
+    { id: 'fireball',    tier: 'major', type: 'ability', icon: '\u{2604}\u{FE0F}', name: 'Fireball', desc: `Every ${ABILITY_CFG.fireball.cooldown}s, hurl a fireball at your target for full Magic damage, splashing 25% onto every hex adjacent to it — including you, if you're standing that close.`,
+      triggerType: 'ability', scalesWith: ['magic'], frequencyGate: 'cooldown' },
     { id: 'hurricane',   tier: 'major', type: 'ability', icon: '\u{1F32C}\u{FE0F}', name: "Hurricane's Might", desc: `Every ${ABILITY_CFG.hurricane.cooldown}s, a swirling gust pushes every enemy within ${HURRICANE_RADIUS} hexes outward and around you — anything shoved into a Chasm falls to its death.`,
       triggerType: 'ability', frequencyGate: 'cooldown' },
     { id: 'marksmansreach', tier: 'minor', icon: '\u{1F4CF}', name: "Marksman's Reach", desc: '+1 attack range with Sword, +1 with Spear, +2 with Crossbow.',
       triggerType: 'passive', modifies: ['atkRange'] },
     { id: 'truesight',   tier: 'minor', icon: '\u{1F441}\u{FE0F}', name: 'True Sight', desc: "See past Fog Patch and other sight-blockers that don't physically bar your path, as if they weren't there — doesn't help against a real barrier like Ice Wall or Ruins.",
       triggerType: 'passive' },
+    { id: 'ironboots',   tier: 'minor', icon: '\u{1F97E}', name: 'Iron Boots', desc: '+5 Armor, -50% movement speed.',
+      triggerType: 'passive', modifies: ['armor', 'moveSpeed'] },
+    { id: 'magicmissile', tier: 'minor', type: 'ability', icon: '\u{2728}', name: 'Magic Missile', desc: `Every ${ABILITY_CFG.magicmissile.cooldown}s, fire 2 bolts at two different enemies for 40% Magic damage each. Ignores line of sight and paths around Ice Wall/Ruins with infinite range — but flies straight over a Chasm.`,
+      triggerType: 'ability', scalesWith: ['magic'], frequencyGate: 'cooldown' },
   ];
 
   const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
@@ -841,18 +872,41 @@
   }
 
   // ---------------- Data: hero weapons ----------------
-  // Independent of talismans — the hero owns all three from the start (see freshHero) and
-  // switches which is equipped from the Loadout tab, same timing rule as talisman re-equipping
-  // (prep phase only). Each one's `role` drives atkRange via ROLE_RANGE, the same lookup enemies
-  // already use, so switching weapons is really just switching which role the hero plays: sword
-  // = melee, spear = reach, crossbow = ranged. `level` doesn't do anything yet (no upgrade path
-  // exists) — it's tracked now so a future leveling system has somewhere to live.
+  // Weapons are now items you carry (see hero.carriedWeapons — max 3, duplicates allowed) rather
+  // than a fixed trio you always own — a new one bought/found beyond 3 means giving one up (see
+  // acquireWeapon). `role` still drives atkRange via ROLE_RANGE, UNLESS `rangeOverride` is set
+  // (Whip's 3-hex reach doesn't map onto melee(1)/reach(2)/ranged(5), so it gets its own number —
+  // role stays 'reach' purely for the animation style, see HERO_WEAPON_VISUALS). `dmgMult`/
+  // `atkSpeedMult` (both default 1) replace what used to be hardcoded per-weapon branches in
+  // computeStats, so adding a new weapon's numbers never requires touching that function again.
+  // `magical: true` sorts a weapon into Galdri's Magical Mysteries instead of Camine's Armory
+  // (see NON_MAGICAL_WEAPON_IDS/MAGICAL_WEAPON_IDS) — purely a shop-flavor split. `scalesOffMagic:
+  // true` is the separate, purely mechanical flag (only the Staff has it): its dmgMult applies to
+  // the Magic stat instead of Damage, and heroAttack reads s.magic instead of s.dmg for it — a
+  // magical-FLAVORED weapon like the Wand can still deal ordinary physical damage.
   const HERO_WEAPONS = {
     sword:    { id: 'sword',    name: 'Sword',    icon: '\u{1F5E1}\u{FE0F}', role: 'melee',  desc: 'Balanced melee weapon — no tradeoffs.' },
-    spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach',  desc: '0.75x attack speed, 1.25x damage. Pierces in a line — the near hex takes a full hit, the target takes 0.75x.' },
-    crossbow: { id: 'crossbow', name: 'Crossbow', icon: '\u{1F3F9}', role: 'ranged', desc: '0.5x attack speed, 1.5x damage per shot.' },
+    spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach',  desc: '0.75x attack speed, 1.25x damage. Pierces in a line — the near hex takes a full hit, the target takes 0.75x.',
+      dmgMult: 1.25, atkSpeedMult: 0.75 },
+    crossbow: { id: 'crossbow', name: 'Crossbow', icon: '\u{1F3F9}', role: 'ranged', desc: '0.5x attack speed, 1.5x damage per shot.',
+      dmgMult: 1.5, atkSpeedMult: 0.5 },
+    duelistblade: { id: 'duelistblade', name: "Duelist's Blade", icon: '\u{2694}\u{FE0F}', role: 'melee',
+      desc: 'Balanced melee weapon, same as the Sword — but +10 damage while advancing (moved at least one hex since your last attack). Lasts through every hit until you land a kill, then resets; you have to move again to reactivate it.' },
+    whip: { id: 'whip', name: 'Whip', icon: '\u{1FA80}', role: 'reach', rangeOverride: 3, atkSpeedMult: 0.9,
+      desc: '3-hex range, 0.9x attack speed. Every hit slows the target by 75% for 1.5s.' },
+    boomerang: { id: 'boomerang', name: 'Boomerang', icon: '\u{1FA83}', role: 'ranged',
+      desc: 'Ranged, no other tradeoffs — but after hitting your target, it bounces to up to 2 more enemies, full damage each, as long as each next enemy is within 2 hexes of the last and in clear line of sight (blocked by Ice Wall/Ruins, same as any shot).' },
+    wand: { id: 'wand', name: 'Wand', icon: '\u{1FA84}', role: 'ranged', magical: true,
+      dmgMult: 0.5, atkSpeedMult: 2,
+      desc: '2x attack speed, 0.5x damage per hit.' },
+    staff: { id: 'staff', name: 'Staff', icon: '\u{1F52E}', role: 'ranged', magical: true, scalesOffMagic: true,
+      dmgMult: 0.25, atkSpeedMult: 4,
+      desc: 'A continuous purple beam rather than single swings — very fast, low-damage hits (scaling off Magic, not Damage) that still count individually for on-hit talismans like Bloodthirst or Electric Shock, they just land far more often.' },
   };
   const HERO_WEAPON_IDS = Object.keys(HERO_WEAPONS);
+  const NON_MAGICAL_WEAPON_IDS = HERO_WEAPON_IDS.filter(id => !HERO_WEAPONS[id].magical);
+  const MAGICAL_WEAPON_IDS = HERO_WEAPON_IDS.filter(id => HERO_WEAPONS[id].magical);
+  const CARRY_CAPACITY = 3; // hero.carriedWeapons max length — see acquireWeapon
 
   // Loadout tab hover tooltip — computeStats(id) previews the weapon's REAL numbers (every
   // active talisman bonus included) as if it were equipped, not just its raw multipliers, so
@@ -863,9 +917,9 @@
     const s = computeStats(id);
     const lines = [
       w.desc,
-      `Damage: ${Math.round(s.dmg)}`,
+      `Damage: ${Math.round(w.scalesOffMagic ? s.magic : s.dmg)}`,
       `Attack Speed: ${s.atkSpeed.toFixed(2)}/s`,
-      `Range: ${w.role} (${s.atkRange} hex${s.atkRange > 1 ? 'es' : ''})`,
+      `Range: ${s.atkRange} hex${s.atkRange > 1 ? 'es' : ''}`,
     ];
     if (w.effect) lines.push(`Effect: ${w.effect}`);
     return lines.join('\n');
@@ -879,6 +933,13 @@
     sword:    { weaponShape: 'cross', weaponBaseReach: 0.6, weaponLunge: 0.5, weaponBlade: 0.55, weaponTail: 0.15, weaponGuard: 0.18 },
     spear:    { weaponShape: 'cross', tipShape: 'triangle', tipWidth: 0.09, weaponBaseReach: 0.75, weaponWindup: 0.3, weaponLunge: 0.65, weaponBlade: 1.65, weaponTail: 0.06, weaponGuard: 0.06 },
     crossbow: { weaponShape: 'crossbow', weaponBaseReach: 0.4, weaponWindup: 0.32, weaponWindupFrac: 0.75, weaponLunge: 0.1 },
+    // The 5 new weapons reuse the 2 existing weaponShape dispatches (cross/crossbow) rather than
+    // adding new drawing code — just distinct enough size params to read as different pieces.
+    duelistblade: { weaponShape: 'cross', weaponBaseReach: 0.6, weaponLunge: 0.55, weaponBlade: 0.6, weaponTail: 0.12, weaponGuard: 0.22, weaponColor: '#f0d878' },
+    whip:         { weaponShape: 'cross', weaponBaseReach: 0.7, weaponWindup: 0.25, weaponLunge: 0.6, weaponBlade: 1.4, weaponWidth: 0.05, weaponTail: 0.02, weaponGuard: 0.04, weaponColor: '#c48a4a' },
+    boomerang:    { weaponShape: 'crossbow', weaponBaseReach: 0.45, weaponWindup: 0.28, weaponWindupFrac: 0.7, weaponLunge: 0.15, weaponColor: '#d4a24c' },
+    wand:         { weaponShape: 'cross', weaponBaseReach: 0.5, weaponLunge: 0.35, weaponBlade: 0.35, weaponWidth: 0.08, weaponTail: 0.02, weaponGuard: 0.03, weaponColor: '#b47cff' },
+    staff:        { weaponShape: 'cross', weaponBaseReach: 0.55, weaponLunge: 0.3, weaponBlade: 0.85, weaponWidth: 0.09, weaponTail: 0.04, weaponGuard: 0.05, weaponColor: '#b47cff' },
   };
 
   // ---------------- Wave scaling config ----------------
@@ -916,13 +977,15 @@
   const FLOOR_LENGTH = 12;
   function isNonCombatSlot(pos) { return pos % 4 === 0; }
 
-  // The three non-combat room types — always all three, shuffled, at every reserved slot.
-  // More variety (multiple inns with different boons, etc.) can grow this list later; the
-  // dispatch in generatePathChoices/choosePath/enterRoomVisit doesn't care how many there are.
+  // The non-combat room types — always all of them, shuffled, at every reserved slot. More
+  // variety (multiple inns with different boons, etc.) can grow this list later; the dispatch in
+  // generatePathChoices/choosePath/enterRoomVisit doesn't care how many there are.
   const NON_COMBAT_NODE_TYPES = [
     { roomKey: 'spellweaver', tierLabel: "Spellweaver's Wares", desc: 'A hollow-eyed peddler hawks trinkets stitched from the dead.' },
     { roomKey: 'inn', tierLabel: "Wanderer's Inn", desc: 'A guttering fire in the dark — the only warmth for miles.' },
     { roomKey: 'shrine', tierLabel: 'Shrine of Offering', desc: 'A blood-slicked altar demands its due.' },
+    { roomKey: 'camine', tierLabel: "Camine's Armory", desc: 'A grizzled armorer eyes your gear with open contempt.' },
+    { roomKey: 'galdri', tierLabel: "Galdri's Magical Mysteries", desc: 'A cackling hedge-mage juggles wares that hum with unstable magic.' },
   ];
   const GOLD_CFG = { perKillBase: 2, perKillPerWave: 0.5, waveClearBase: 5, waveClearPerWave: 2 };
 
@@ -1252,6 +1315,63 @@
     });
   }
 
+  // ---------------- Camine's Armory / Galdri's Magical Mysteries ----------------
+  // Unlike Spellweaver, these rotate from a pool that's DELIBERATELY not filtered against what
+  // you already carry — "can carry 3 swords if you want to" means duplicates have to stay
+  // purchasable. Priced like a major talisman (a build-defining choice), same shape as
+  // spellweaverPrice just its own flat curve.
+  function weaponRoomPrice(depth) {
+    return Math.round(30 + depth * 3);
+  }
+  function rollWeaponRoomOffer(pool, depth) {
+    return shuffle([0, 1, 2]).map(() => ({
+      weaponId: pool[Math.floor(Math.random() * pool.length)],
+      price: weaponRoomPrice(depth),
+      bought: false,
+    }));
+  }
+
+  // Buying always ends with a discard prompt (see roomState.step) — the hero starts every run
+  // already carrying 3 (see freshHero), and nothing in the game currently removes a weapon any
+  // other way, so this path is reachable every single visit, not just an edge case. The
+  // `< CARRY_CAPACITY` branch exists purely for robustness if that ever changes.
+  function buyWeaponRoomItem(idx) {
+    if (phase !== 'roomVisit') return;
+    const offer = roomState.offers[idx];
+    if (!offer || offer.bought || gold < offer.price) return;
+    gold -= offer.price;
+    offer.bought = true;
+    if (hero.carriedWeapons.length < CARRY_CAPACITY) {
+      hero.carriedWeapons.push(offer.weaponId);
+      log(`Bought ${HERO_WEAPONS[offer.weaponId].name} from ${chosenEncounter.tierLabel}.`, 'wave');
+      leaveRoom();
+      return;
+    }
+    roomState = { step: 'discard', pendingWeaponId: offer.weaponId };
+    renderAll();
+  }
+
+  // Finalizes a purchase already paid for (see buyWeaponRoomItem) by giving up one currently
+  // carried weapon at the chosen index — an index, not an id, since carriedWeapons can hold
+  // duplicates and the player is pointing at one SPECIFIC chip on screen. If the discarded
+  // weapon was the equipped one, falls back to whatever's left at index 0 — there's always at
+  // least 2 remaining (the 3rd slot is about to be filled by the new weapon).
+  function finalizeWeaponDiscard(discardIdx) {
+    if (phase !== 'roomVisit' || roomState.step !== 'discard') return;
+    const discardedId = hero.carriedWeapons[discardIdx];
+    if (discardedId == null) return;
+    hero.carriedWeapons.splice(discardIdx, 1);
+    hero.carriedWeapons.push(roomState.pendingWeaponId);
+    if (hero.equippedWeapon === discardedId && !hero.carriedWeapons.includes(discardedId)) {
+      hero.equippedWeapon = hero.carriedWeapons[0];
+    }
+    const flavor = chosenEncounter.roomKey === 'camine'
+      ? '"…straight to the scrap pile with this piece of junk," Master Armorer Camine mutters.'
+      : '"Ahh, this one\'s magic has gone quite stale — back into the void with it!" Galdri cackles.';
+    log(`Left ${HERO_WEAPONS[discardedId].name} behind and picked up ${HERO_WEAPONS[roomState.pendingWeaponId].name}. ${flavor}`, 'wave');
+    leaveRoom();
+  }
+
   // ---------------- Data: legacy (permanent, bought with essence) ----------------
   // Deliberately just these three for now — every stat-growth node (Vitality/Warrior's/Swift/
   // Hardened/Fortune's/Prospector's/Head Start) was cut so Legacy is purely about long-run
@@ -1380,6 +1500,10 @@
   // anything already in range) so you can turtle behind an Ice Wall until, say, an archer starts
   // shooting you and it's worth pushing out. Reset to 'advance' at the start of every fight.
   let heroStance = 'advance';
+  // 'nearest' | 'furthest' | 'strongest' | 'weakest' | 'random' — see pickHeroTarget/
+  // maybeRetargetHero. Persists fight-to-fight exactly like heroStance, only resets on a full
+  // New Attempt (see restart()).
+  let heroTargetMode = 'nearest';
   let shopOffer = [];        // ids of the up-to-5 upgrades currently offered
   let shopFrozenNext = false; // if true, the next prep-phase shop refresh is skipped once
   let rerollCost = 1;         // doubles per manual reroll this prep phase, resets on refresh
@@ -1397,13 +1521,18 @@
     return {
       hp: 100,
       upgrades: {
-        damage: 0, atkSpeed: 0, maxHP: 0, armor: 0,
+        damage: 0, atkSpeed: 0, maxHP: 0, armor: 0, magic: 0,
         ironResolve: 0, kineticWard: 0, fleetReflexes: 0, adrenalFocus: 0,
       },
+      potions: 0,                    // gold-bought consumable stock — see POTION_COST/POTION_HEAL_AMOUNT
       talismanBag: [],              // every talisman ever acquired this run, owned but not necessarily active
       equipped: { major: [], minor: [] }, // only these actually affect stats/combat — see isEquipped
-      weapons: { sword: { level: 1 }, spear: { level: 1 }, crossbow: { level: 1 } }, // owned from the start — see HERO_WEAPONS
-      equippedWeapon: 'sword', // drives atkRange (see computeStats) and the hero's own drawn weapon shape (see HERO_WEAPON_VISUALS)
+      // Weapons you carry — a multiset, max 3 (see acquireWeapon/CARRY_CAPACITY), duplicates
+      // allowed ("3 Swords" is valid). Starts full with the 3 originals so a brand-new run
+      // already has to discard-to-replace at Camine's/Galdri's, same as any later run.
+      carriedWeapons: ['sword', 'spear', 'crossbow'],
+      equippedWeapon: 'sword', // must be one of carriedWeapons — drives atkRange (see computeStats) and the hero's own drawn weapon shape (see HERO_WEAPON_VISUALS)
+      advancingBonusActive: false, // Duelist's Blade — see resolveHeroMovement/heroAttack
       attackCount: 0, atkTimer: 0, cooldowns: {}, secondWindUsedThisWave: false,
       // Per-talisman-id permanent stack counters (Momentum's growth, and any future "Growth"
       // trigger-type talisman) — deliberately keyed on OWNERSHIP (talismanBag), not equip state,
@@ -1457,7 +1586,7 @@
   // selection, never a purchase.
   function equipWeapon(id) {
     if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
-    if (!HERO_WEAPONS[id] || hero.equippedWeapon === id) return;
+    if (!hero.carriedWeapons.includes(id) || hero.equippedWeapon === id) return;
     hero.equippedWeapon = id;
     renderAll();
   }
@@ -1478,6 +1607,10 @@
     atkSpeed *= (1 + Math.min(0.5, 0.10 * u.adrenalFocus));
     let maxHP = 100 + 15 * u.maxHP;
     let armor = 0 + 1 * u.armor;
+    // Separate from `dmg` entirely — its own economy (see UPGRADES' `magic` entry), read only by
+    // weapons/talismans that explicitly scale off it (Staff, Fireball, Magic Missile — see
+    // HERO_WEAPONS' scalesOffMagic and TALISMANS' scalesWith below).
+    let magic = 10 + 2 * u.magic;
     // Damage Reduction: simple additive now, capped at 5 levels × 10% = 50% max.
     let damageReductionPct = Math.min(0.5, 0.10 * u.kineticWard);
     // Gold generation lives entirely in talismans now (Golden Touch, Bounty Hunter) — no shop
@@ -1491,15 +1624,25 @@
     const critDamage = 2.0;
     // Driven entirely by whichever weapon is equipped (see HERO_WEAPONS/equipWeapon) — the
     // same ROLE_RANGE lookup enemies use for their own role, so Sword/Spear/Crossbow really
-    // just mean melee/reach/ranged for the hero too.
-    let atkRange = ROLE_RANGE[HERO_WEAPONS[equippedWeapon].role];
-    // The Spear trades attack speed for damage and its piercing thrust (see heroAttack) —
-    // a real tradeoff, not a strict upgrade over the Sword. The Crossbow trades even more
-    // speed for a bigger hit per shot, matching the Archer's own slow-but-hard-hitting feel.
-    if (equippedWeapon === 'spear') { atkSpeed *= 0.75; dmg *= 1.25; }
-    if (equippedWeapon === 'crossbow') { atkSpeed *= 0.5; dmg *= 1.5; }
+    // just mean melee/reach/ranged for the hero too — UNLESS the weapon sets its own
+    // rangeOverride (Whip's 3 hexes doesn't fit any of melee(1)/reach(2)/ranged(5)).
+    const equippedW = HERO_WEAPONS[equippedWeapon];
+    let atkRange = equippedW.rangeOverride ?? ROLE_RANGE[equippedW.role];
+    // Every weapon's own dmg/attack-speed tradeoff now lives as data on HERO_WEAPONS
+    // (dmgMult/atkSpeedMult, both default 1) instead of a hardcoded branch per weapon id here —
+    // the Spear/Crossbow tradeoffs below are unchanged, just data-driven so new weapons (Whip,
+    // Wand, Staff, ...) don't need this function touched again. scalesOffMagic (only the Staff)
+    // routes its dmgMult onto the separate Magic stat instead of Damage.
+    if (equippedW.scalesOffMagic) magic *= (equippedW.dmgMult || 1);
+    else dmg *= (equippedW.dmgMult || 1);
+    atkSpeed *= (equippedW.atkSpeedMult || 1);
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
+    // Multiplies the hero's own moveSpeed field at the resolveHeroMovement call site (see there) —
+    // kept separate from every other stat here since it's the only one not read straight off this
+    // returned object by a plain field name already in use elsewhere (hero.moveSpeed is a fixed
+    // per-hero value set once in freshHero, not itself recomputed each frame).
+    let moveSpeedMult = 1;
 
     // +1 Sword/Spear, +2 Crossbow — a flat bonus per weapon rather than a % of ROLE_RANGE, since
     // scaling Sword's already-tiny range of 1 by a percentage wouldn't add up to anything
@@ -1519,8 +1662,9 @@
     if (has('thorns')) thornsPct += 0.25;
     if (has('bloodthirst')) lifestealPct += 0.10;
     if (has('killerinstinct')) critChance += 0.20;
-    if (has('battlefury')) dmg *= 1.20;
+    if (has('battlefury')) dmg *= 1.10;
     if (has('ironvitality')) maxHP *= 1.25;
+    if (has('ironboots')) { armor += 5; moveSpeedMult *= 0.5; }
     if (has('momentum')) atkSpeed *= (1 + Math.min(0.40, 0.02 * (hero.talismanStacks.momentum || 0)));
     if (has('adrenaline')) {
       const missingPct = 1 - hero.hp / maxHP;
@@ -1540,7 +1684,7 @@
       dodgeChance = Math.min(1, dodgeChance * 1.1);
     }
 
-    return { dmg, atkSpeed, maxHP: Math.round(maxHP), armor, damageReductionPct, critChance, critDamage, regen, bonusGoldPerKill, cooldownReductionPct, goldMult, shopCostMult, dodgeChance, thornsPct, lifestealPct, atkRange };
+    return { dmg, magic, atkSpeed, maxHP: Math.round(maxHP), armor, damageReductionPct, critChance, critDamage, regen, bonusGoldPerKill, cooldownReductionPct, goldMult, shopCostMult, dodgeChance, thornsPct, lifestealPct, atkRange, moveSpeedMult };
   }
 
   // A stat is unlocked the instant you own something tagged to unlock it — no separate
@@ -1700,6 +1844,11 @@
   function spawnFireballBurst(x, y) {
     effects.push({ type: 'fireballBurst', x, y, life: 1 });
   }
+  // Magic Missile's bolts — same trailing-streak shape as Fireball's own, tinted violet so it
+  // reads as arcane rather than fire.
+  function spawnMagicMissileBolt(x1, y1, x2, y2) {
+    effects.push({ type: 'magicMissileBolt', x1, y1, x2, y2, life: 1 });
+  }
 
   // Hurricane's Might's wind ring — a dashed circle (vs. Shockwave's solid one) so the two read
   // as different effects at a glance even though both are "expanding ring centered on the hero."
@@ -1742,63 +1891,61 @@
 
   function heroPixelPos() { return hexPixelPos(heroHex.row, heroHex.idx); }
 
-  // Sticky targeting: the hero keeps attacking the same enemy across multiple hits rather than
-  // re-rolling "closest" every attack (avoids the target visually flickering between two
-  // equally-close enemies). Re-picks when it has no target, the current one died (see killEnemy),
-  // or — while still closing distance, not yet actually fighting it — a different enemy has
-  // become clearly closer (see maybeRetargetHero). Ties at the minimum hex-distance break on
-  // lowest id (whichever enemy has been on the field longest). A future ability that repositions
-  // the hero MUST null heroTargetId after moving it, so this naturally re-picks from the new
-  // position.
+  // Ranks an enemy for the currently selected heroTargetMode — LOWER is better, same convention
+  // pickHeroTarget/maybeRetargetHero already used for plain nearest-distance. Strongest/Weakest
+  // read current HP (not max), so a half-dead Brute stops counting as "strongest" the moment it
+  // actually isn't anymore. Random isn't scored here at all (see pickHeroTarget/maybeRetargetHero
+  // — a real per-tick re-roll would look identical to the hero doing nothing coherent).
+  function targetScore(e) {
+    const d = hexDistance(e.hex, heroHex);
+    if (heroTargetMode === 'furthest') return -d;
+    if (heroTargetMode === 'strongest') return -e.hp;
+    if (heroTargetMode === 'weakest') return e.hp;
+    return d; // 'nearest'
+  }
+
+  // Picks a fresh target from scratch — called whenever there is none (fight start, or the
+  // current one just died, see killEnemy nulling heroTargetId). Random draws uniformly from the
+  // whole queue; every other mode picks whichever enemy scores best under targetScore, ties
+  // breaking on lowest id (whichever enemy has been on the field longest) same as before.
   function pickHeroTarget() {
-    let best = null, bestDist = Infinity;
+    if (!queue.length) { heroTargetId = null; return; }
+    if (heroTargetMode === 'random') {
+      heroTargetId = queue[Math.floor(Math.random() * queue.length)].id;
+      return;
+    }
+    let best = null, bestScore = Infinity;
     queue.forEach(e => {
-      const d = hexDistance(e.hex, heroHex);
-      if (d < bestDist || (d === bestDist && best && e.id < best.id)) { bestDist = d; best = e; }
+      const sc = targetScore(e);
+      if (sc < bestScore || (sc === bestScore && best && e.id < best.id)) { bestScore = sc; best = e; }
     });
-    heroTargetId = best ? best.id : null;
+    heroTargetId = best.id;
   }
   function currentHeroTarget() {
     if (heroTargetId == null) return null;
     return queue.find(e => e.id === heroTargetId) || null;
   }
 
-  // Re-evaluates the sticky target ONLY while the hero hasn't actually caught up to it yet (out
-  // of range, or in range but LOS-blocked) — once already fighting it, this never runs, so there's
-  // still no mid-swing flicker. Nate's reported bug: the hero locked onto the closest enemy, but
-  // that enemy then had to detour around an Ice Wall and drifted genuinely farther away tick by
-  // tick, while a different enemy stayed on a short, clear path — the hero just kept chasing the
-  // now-farther original target forever, since sticky targeting had no mechanism to notice. A
-  // margin (not "any closer enemy at all") avoids swapping over normal 1-hex jitter between two
-  // enemies converging at a similar pace — it only fires once the gap is large enough to be a
-  // real, sustained difference, like an actual wall detour would produce.
-  const RETARGET_MARGIN = 2;
+  // Continuous live re-evaluation — every simulationStep tick, whichever enemy currently scores
+  // best under the selected mode becomes the target, full stop. This is a deliberately bigger
+  // change from the old sticky-with-a-margin behavior: a mode can now swap the hero off a target
+  // it's mid-fight with (e.g. "Furthest" will happily ignore an enemy that just became adjacent
+  // and is actively hitting the hero, since that enemy is now the CLOSEST, which scores worst
+  // under Furthest) — accepted as the tradeoff for "the mode IS the targeting rule" instead of
+  // the old distance-margin/attacker-priority special-casing.
   function maybeRetargetHero() {
     const target = currentHeroTarget();
     if (!target) { pickHeroTarget(); return; }
-    const s = computeStats();
-    if (hexDistance(heroHex, target.hex) <= effectiveAtkRange(heroHex, s.atkRange, isEquipped('truesight')) && hasLineOfSight(heroHex, target.hex, isEquipped('truesight'))) return; // already engaged — stay locked on
-
-    // Top priority: some OTHER enemy is already within ITS OWN role range + LOS of the hero —
-    // i.e. actively able to attack (or already attacking) — while the current target isn't even
-    // reachable to hit back. Nate's report: the hero stayed locked onto a target it couldn't
-    // touch while a completely different enemy, right next to it, was the one actually landing
-    // hits. Switch immediately rather than running the distance-margin check below, which is
-    // tuned for the slower "my target drifted farther away" case, not "I'm being hit right now."
-    const attacker = queue.find(e => e.id !== target.id &&
-      hexDistance(e.hex, heroHex) <= effectiveAtkRange(e.hex, ROLE_RANGE[e.role]) && hasLineOfSight(e.hex, heroHex));
-    if (attacker) { heroTargetId = attacker.id; return; }
-
-    // Otherwise, re-check whether a different enemy has become clearly closer (see item 24's
-    // wall-detour fix) — a margin, not "any closer at all," to avoid flickering between two
-    // enemies converging at a similar pace.
-    const targetDist = hexDistance(target.hex, heroHex);
-    let best = target, bestDist = targetDist;
+    // Random deliberately never re-rolls while its current target is still alive — it already
+    // re-picks fresh the instant that target dies, via the !target branch above (killEnemy nulls
+    // heroTargetId — see there).
+    if (heroTargetMode === 'random') return;
+    let best = target, bestScore = targetScore(target);
     queue.forEach(e => {
-      const d = hexDistance(e.hex, heroHex);
-      if (d < bestDist || (d === bestDist && e.id < best.id)) { bestDist = d; best = e; }
+      const sc = targetScore(e);
+      if (sc < bestScore || (sc === bestScore && e.id < best.id)) { bestScore = sc; best = e; }
     });
-    if (best.id !== target.id && bestDist + RETARGET_MARGIN <= targetDist) heroTargetId = best.id;
+    if (best.id !== target.id) heroTargetId = best.id;
   }
 
   function heroAttack() {
@@ -1824,6 +1971,15 @@
       spawnBolt(originX, originY, tp.x, tp.y);
     }
 
+    // Duelist's Blade only ever resets on a kill its OWN attack causes (this function) — never
+    // on kills from abilities/other sources, since the passive is about the weapon's own swing,
+    // not "you personally killed something by any means." Every killEnemy call below that's
+    // reachable from a Duelist's Blade swing goes through this instead of calling killEnemy raw.
+    const killEnemyFromHeroAttack = enemy => {
+      killEnemy(enemy);
+      if (hero.equippedWeapon === 'duelistblade') hero.advancingBonusActive = false;
+    };
+
     if (isEquipped('executioner') && target.hp / target.maxHp < 0.15) {
       const executedHp = Math.max(1, Math.round(target.hp));
       target.hp = 0;
@@ -1833,7 +1989,7 @@
       spawnDamageNumber(p.x, p.y - p.r - 10, 'EXECUTED', '#ff6b6b');
       log('Executed!', 'crit');
       logDamageDealt('Executioner', executedHp);
-      killEnemy(target);
+      killEnemyFromHeroAttack(target);
       return;
     }
 
@@ -1861,13 +2017,18 @@
           logDamageDealt('Spear Pierce', pierceDmg);
           applyLifesteal(pierceDmg);
           applyAffixReactions(firstEnemy, pierceDmg);
-          if (firstEnemy.hp <= 0) killEnemy(firstEnemy);
+          if (firstEnemy.hp <= 0) killEnemyFromHeroAttack(firstEnemy);
           targetDmgMult = 0.75;
         }
       }
     }
 
-    let dmg = s.dmg;
+    const weaponDef = HERO_WEAPONS[hero.equippedWeapon];
+    let dmg = weaponDef.scalesOffMagic ? s.magic : s.dmg;
+    // Duelist's Blade: a flat +10 while "advancing" (moved at least 1 hex since the last
+    // attack) — composes with crit/Overcharge/pierce like any other component of dmg, rather
+    // than being tacked on separately afterward, so a crit on an advancing swing is +20, not +10.
+    if (hero.equippedWeapon === 'duelistblade' && hero.advancingBonusActive) dmg += 10;
     const isCrit = Math.random() < s.critChance;
     if (isCrit) dmg *= s.critDamage;
     if (isEquipped('overcharge') && hero.attackCount % 5 === 0) dmg *= 2.5;
@@ -1883,6 +2044,44 @@
     logDamageDealt('Auto Attack', dmg);
     applyLifesteal(dmg);
     applyAffixReactions(target, dmg);
+
+    // Whip — every hit slows its target by 75% (see resolveEnemyMovement's slowMult read),
+    // refreshed on every hit rather than stacking, same as Bear Trap/Shockwave's stunTimer.
+    if (hero.equippedWeapon === 'whip') {
+      target.slowTimer = 1.5;
+      target.slowMult = 0.25;
+    }
+
+    // Boomerang — after the primary hit, bounces to up to 2 MORE distinct enemies, each within
+    // 2 hexes of the previous one and in clear LOS (Ice Wall/Ruins block it exactly like any
+    // shot — reusing hasLineOfSight rather than inventing a boomerang-specific check also means
+    // Fog Patch blocks it too, consistent with every other LOS check in the file). Full damage
+    // each bounce, same "no falloff on a multi-hit" precedent Cleave already set for its 3
+    // flanking hexes — picks the nearest unvisited candidate each hop, same tie-break (lowest id)
+    // as every other nearest-enemy search in this file.
+    if (hero.equippedWeapon === 'boomerang') {
+      let bounceSource = target;
+      const hit = [target];
+      for (let i = 0; i < 2; i++) {
+        const candidates = queue.filter(e => !hit.includes(e) && hexDistance(e.hex, bounceSource.hex) <= 2 && hasLineOfSight(bounceSource.hex, e.hex));
+        if (!candidates.length) break;
+        candidates.sort((a, b) => hexDistance(a.hex, bounceSource.hex) - hexDistance(b.hex, bounceSource.hex) || a.id - b.id);
+        const next = candidates[0];
+        hit.push(next);
+        next.hp -= dmg;
+        next.flash = 1;
+        const np = enemyPos(next);
+        const bp = enemyPos(bounceSource);
+        spawnBolt(bp.x, bp.y, np.x, np.y);
+        spawnDamageNumber(np.x, np.y - np.r - 10, String(dmg), '#d4a24c');
+        logDamageDealt('Boomerang Bounce', dmg);
+        applyLifesteal(dmg);
+        applyAffixReactions(next, dmg);
+        if (next.hp <= 0) killEnemyFromHeroAttack(next);
+        bounceSource = next;
+      }
+      if (hit.length > 1) log(`The boomerang bounces to ${hit.length - 1} more enem${hit.length - 1 > 1 ? 'ies' : 'y'}!`, 'crit');
+    }
 
     // Electric Shock — every 4th attack, the hit arcs from the struck target to every enemy
     // adjacent to ITS hex (not the hero's), so it rewards attacking into a cluster rather than
@@ -1916,10 +2115,10 @@
         applyLifesteal(shockDmg);
         applyAffixReactions(e, shockDmg);
       });
-      chainTargets.filter(e => e.hp <= 0).forEach(killEnemy);
+      chainTargets.filter(e => e.hp <= 0).forEach(killEnemyFromHeroAttack);
     }
 
-    if (target.hp <= 0) killEnemy(target);
+    if (target.hp <= 0) killEnemyFromHeroAttack(target);
   }
 
   // Not a whirlwind — a 3-hex swing: the hex the hero is currently attacking, plus whichever
@@ -2053,7 +2252,7 @@
     const target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
-    const dmg = Math.max(1, Math.round(s.dmg));
+    const dmg = Math.max(1, Math.round(s.magic));
     const tp = enemyPos(target);
     const heroP = heroPixelPos();
     spawnFireballBolt(heroP.x, heroP.y, tp.x, tp.y);
@@ -2066,7 +2265,7 @@
     applyAffixReactions(target, dmg);
     log(`Fireball explodes for ${dmg}!`, 'crit');
 
-    const splashDmg = Math.max(1, Math.round(s.dmg * 0.25));
+    const splashDmg = Math.max(1, Math.round(s.magic * 0.25));
     const splashTargets = [];
     neighborsOf(target.hex.row, target.hex.idx).forEach(h => {
       const enemy = queue.find(e => e !== target && e.hex.row === h.row && e.hex.idx === h.idx);
@@ -2090,6 +2289,68 @@
       applyAffixReactions(enemy, splashDmg);
     });
     [target, ...splashTargets].filter(e => e.hp <= 0).forEach(killEnemy);
+  }
+
+  // Magic Missile's own reachability rule — deliberately NOT hasLineOfSight. Instead of "is
+  // sight blocked," it asks "is there any path of hexes connecting the hero to this enemy,"
+  // real barriers aside — Ice Wall and Ruins block it exactly like they block movement, but
+  // Chasm doesn't, since the bolts fly straight over a pit, they just can't cut through a wall.
+  // A plain BFS flood-fill from the hero's hex (ignoring unit occupancy — nothing standing in
+  // the way stops a flying bolt) rather than a per-enemy path search, so N reachable enemies
+  // only cost one flood-fill instead of N.
+  function magicMissileBlockedHexes() {
+    return [...iceWallHexes, ...terrainFeatures.filter(f => f.type === 'ruins').map(f => f.hex)];
+  }
+  function magicMissileReachableEnemies() {
+    const blocked = new Set(magicMissileBlockedHexes().map(h => hexKey(h.row, h.idx)));
+    const visited = new Set([hexKey(heroHex.row, heroHex.idx)]);
+    let frontier = [heroHex];
+    while (frontier.length) {
+      const next = [];
+      frontier.forEach(hex => {
+        neighborsOf(hex.row, hex.idx).forEach(n => {
+          const k = hexKey(n.row, n.idx);
+          if (visited.has(k) || blocked.has(k)) return;
+          visited.add(k);
+          next.push(n);
+        });
+      });
+      frontier = next;
+    }
+    return queue.filter(e => visited.has(hexKey(e.hex.row, e.hex.idx)));
+  }
+
+  // Magic Missile — 2 bolts at 2 DIFFERENT reachable enemies (see magicMissileReachableEnemies
+  // above): the current sticky target first if it's reachable, then whichever other reachable
+  // enemy is closest, so it usually finishes off whatever you're already fighting rather than
+  // picking randomly. Fires just 1 bolt if only 1 enemy is reachable, and does nothing (cooldown
+  // still consumed, same "ability just whiffs" shape as Fireball's own no-target guard) if none
+  // are reachable at all.
+  function triggerMagicMissile() {
+    const reachable = magicMissileReachableEnemies();
+    if (!reachable.length) return;
+    const s = computeStats();
+    const dmg = Math.max(1, Math.round(s.magic * 0.4));
+    const current = currentHeroTarget();
+    const targets = [];
+    if (current && reachable.includes(current)) targets.push(current);
+    reachable
+      .filter(e => !targets.includes(e))
+      .sort((a, b) => hexDistance(a.hex, heroHex) - hexDistance(b.hex, heroHex))
+      .forEach(e => { if (targets.length < 2) targets.push(e); });
+    const heroP = heroPixelPos();
+    targets.forEach(enemy => {
+      const ep = enemyPos(enemy);
+      spawnMagicMissileBolt(heroP.x, heroP.y, ep.x, ep.y);
+      enemy.hp -= dmg;
+      enemy.flash = 1;
+      spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(dmg), '#b47cff');
+      logDamageDealt('Magic Missile', dmg);
+      applyLifesteal(dmg);
+      applyAffixReactions(enemy, dmg);
+    });
+    log(`${targets.length > 1 ? 'Two arcane bolts streak' : 'An arcane bolt streaks'} out!`, 'crit');
+    targets.filter(e => e.hp <= 0).forEach(killEnemy);
   }
 
   // Hurricane's Might's Push destination — picks the hex on the ring one step FARTHER from
@@ -2126,6 +2387,9 @@
     const color = notable ? '#d97b3f' : (ROLE_COLOR[enemy.role] || '#c25b5b');
     spawnFalling(p.x, p.y, p.r, color);
     log(`${enemy.isBoss ? 'The boss' : 'An enemy'} is swept into the chasm and falls to its death!`, 'crit');
+    // Credit the HP it had right before the fall as Hurricane's Might "damage" for the post-combat
+    // summary only — intentionally NOT routed through applyLifesteal, since nothing actually hit it.
+    logDamageDealt("Hurricane's Might", enemy.hp);
     killEnemy(enemy);
   }
 
@@ -2294,6 +2558,19 @@
   // Shared by every source of hero damage that can kill (enemy hits, Cursed's reflect,
   // Plagued's poison tick) so Second Wind/game-over logic only lives in one place.
   function checkHeroDeath() {
+    if (hero.hp > 0) return;
+    // Potions auto-drink before Second Wind gets a chance — Second Wind is a once-per-wave
+    // talisman slot, worth saving for when the stockpile's already empty, whereas potions are
+    // just spent inventory with no reason to hoard. Keeps drinking (one at a time, +25 HP each)
+    // until either back above 0 or out of stock, so a single potion isn't assumed to always be
+    // enough against a bigger hit.
+    while (hero.hp <= 0 && hero.potions > 0) {
+      hero.potions--;
+      const before = hero.hp;
+      hero.hp = Math.min(computeStats().maxHP, hero.hp + POTION_HEAL_AMOUNT);
+      logHealing('Potion', hero.hp - before);
+      log(`A Potion bursts open just in time, restoring ${Math.round(hero.hp - before)} HP!`, 'crit');
+    }
     if (hero.hp > 0) return;
     const s = computeStats();
     if (isEquipped('secondwind') && !hero.secondWindUsedThisWave) {
@@ -2519,6 +2796,8 @@
     const key = chosenEncounter.roomKey;
     if (key === 'spellweaver') roomState = { offers: rollSpellweaverOffer(wave) };
     else if (key === 'shrine') roomState = { step: 'pick' };
+    else if (key === 'camine') roomState = { offers: rollWeaponRoomOffer(NON_MAGICAL_WEAPON_IDS, wave) };
+    else if (key === 'galdri') roomState = { offers: rollWeaponRoomOffer(MAGICAL_WEAPON_IDS, wave) };
     else roomState = {};
     renderAll();
   }
@@ -2725,6 +3004,7 @@
     hero.poisonStacks = 0;
     hero.plaguedDmgRef = 0;
     hero.decoy = null;
+    hero.advancingBonusActive = false; // Duelist's Blade starts inactive each fight — has to earn it by moving first
     hero.cooldowns = {}; // abilities start fresh each fight, never carrying a head start (or a
                           // deficit) over from the last one
     smokeZones = [];
@@ -2755,6 +3035,27 @@
       const tags = Array.isArray(u.unlocksStat) ? u.unlocksStat : [u.unlocksStat];
       log(`Unlocked: ${tags.map(s => STAT_LABELS[s] || s).join(' & ')}!`, 'wave');
     }
+    renderAll();
+  }
+
+  // Potions — bought and drunk directly by name rather than through UPGRADES/buyUpgrade, since
+  // they're an uncapped repeatable stockpile at a flat price, not a leveled stat with a cost
+  // curve. Both share the exact same phase gate as every other shop/reroll action (prep only).
+  function buyPotion() {
+    if ((phase !== 'prepping' && phase !== 'beginnerPrep') || gold < POTION_COST) return;
+    gold -= POTION_COST;
+    hero.potions++;
+    renderAll();
+  }
+  function drinkPotion() {
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
+    if (hero.potions <= 0) return;
+    const s = computeStats();
+    if (hero.hp >= s.maxHP) return;
+    hero.potions--;
+    const before = hero.hp;
+    hero.hp = Math.min(s.maxHP, hero.hp + POTION_HEAL_AMOUNT);
+    log(`You drink a Potion, restoring ${Math.round(hero.hp - before)} HP.`, 'wave');
     renderAll();
   }
 
@@ -2840,6 +3141,7 @@
     // Hold last time — resync the button highlight here rather than only on click, so the UI
     // never silently disagrees with the actual state after a new fight starts.
     document.querySelectorAll('.stanceBtn').forEach(b => b.classList.toggle('active', b.dataset.stance === heroStance));
+    document.querySelectorAll('.targetModeBtn').forEach(b => b.classList.toggle('active', b.dataset.targetMode === heroTargetMode));
     document.getElementById('floorNum').textContent = floor;
     document.getElementById('waveNum').textContent = wave;
     document.getElementById('goldAmt').textContent = gold;
@@ -2870,8 +3172,10 @@
     document.getElementById('hpBarInner').style.width = hpPct + '%';
     document.getElementById('hpText').textContent = `${Math.max(0, Math.round(hero.hp))} / ${s.maxHP}`;
     document.getElementById('statDamage').textContent = Math.round(s.dmg);
+    document.getElementById('statMagic').textContent = Math.round(s.magic);
     document.getElementById('statAtkSpeed').textContent = s.atkSpeed.toFixed(2) + '/s';
     document.getElementById('statArmor').textContent = s.armor;
+    document.getElementById('statPotions').textContent = hero.potions;
     setStatRow('statRowDamageReduction', 'damageReduction', Math.round(s.damageReductionPct * 100) + '%');
     setStatRow('statRowCritChance', 'critChance', Math.round(s.critChance * 100) + '%');
     setStatRow('statRowRegen', 'regen', s.regen.toFixed(1) + '/s');
@@ -3147,6 +3451,37 @@
         el.appendChild(row);
       });
     });
+
+    // Consumables — outside the UPGRADES/shopOffer rotation entirely: always available to buy
+    // (never rerolled away), and the only shop row with a second action button (Drink), so it's
+    // built by hand rather than through the generic UPGRADES row-builder above.
+    const consumHeader = document.createElement('div');
+    consumHeader.className = 'shopGroupLabel';
+    consumHeader.textContent = 'Consumables';
+    el.appendChild(consumHeader);
+    const potionRow = document.createElement('div');
+    potionRow.className = 'shopRow';
+    potionRow.innerHTML = `
+      <div class="shopInfo">
+        <div class="shopName">Potion</div>
+        <div class="shopDesc">Restores ${POTION_HEAL_AMOUNT} HP. Auto-drunk if a hit would otherwise kill you; drink manually here between fights.</div>
+        <div class="shopLevel">Owned: ${hero.potions}</div>
+      </div>
+      <div class="shopBuy">
+        <div class="shopCost">${POTION_COST}g</div>
+      </div>`;
+    const potionBuyWrap = potionRow.querySelector('.shopBuy');
+    const buyPotionBtn = document.createElement('button');
+    buyPotionBtn.textContent = 'Buy';
+    buyPotionBtn.disabled = !canShop || gold < POTION_COST;
+    buyPotionBtn.addEventListener('click', buyPotion);
+    potionBuyWrap.appendChild(buyPotionBtn);
+    const drinkPotionBtn = document.createElement('button');
+    drinkPotionBtn.textContent = 'Drink';
+    drinkPotionBtn.disabled = !canShop || hero.potions <= 0 || hero.hp >= computeStats().maxHP;
+    drinkPotionBtn.addEventListener('click', drinkPotion);
+    potionBuyWrap.appendChild(drinkPotionBtn);
+    el.appendChild(potionRow);
   }
 
   // `interactive` is only ever true for the game-over modal's copy (see renderLegacyPanel) —
@@ -3197,17 +3532,20 @@
 
     const weaponHeader = document.createElement('div');
     weaponHeader.className = 'shopGroupLabel';
-    weaponHeader.textContent = 'Weapons (click to equip)';
+    weaponHeader.textContent = `Weapons (click to equip) — ${hero.carriedWeapons.length}/${CARRY_CAPACITY} carried`;
     el.appendChild(weaponHeader);
     const weaponWrap = document.createElement('div');
     weaponWrap.className = 'slotRow';
-    HERO_WEAPON_IDS.forEach(id => {
+    // Carried weapons are a multiset now (see hero.carriedWeapons/acquireWeapon) — duplicates of
+    // the same weapon all show as equipped/clickable together, since they're functionally
+    // identical; there's no per-copy state to distinguish them.
+    hero.carriedWeapons.forEach(id => {
       const w = HERO_WEAPONS[id];
       const chip = document.createElement('span');
       const active = hero.equippedWeapon === id;
       chip.className = 'talismanChip slotChip' + (active ? ' equippedWeapon' : '');
       chip.title = weaponTooltip(id);
-      chip.textContent = `${w.icon} ${w.name} Lvl ${hero.weapons[id].level}${active ? ' (equipped)' : ''}`;
+      chip.textContent = `${w.icon} ${w.name}${active ? ' (equipped)' : ''}`;
       if (!active) chip.addEventListener('click', () => equipWeapon(id));
       weaponWrap.appendChild(chip);
     });
@@ -3330,6 +3668,7 @@
     if (chosenEncounter.roomKey === 'spellweaver') renderSpellweaverRoom(body);
     else if (chosenEncounter.roomKey === 'inn') renderInnRoom(body);
     else if (chosenEncounter.roomKey === 'shrine') renderShrineRoom(body);
+    else if (chosenEncounter.roomKey === 'camine' || chosenEncounter.roomKey === 'galdri') renderWeaponRoom(body);
   }
 
   function renderSpellweaverRoom(body) {
@@ -3346,6 +3685,53 @@
       if (!isPlaceholder && !offer.bought) {
         card.style.cursor = 'pointer';
         card.addEventListener('click', () => buySpellweaverItem(idx));
+      }
+      cardsWrap.appendChild(card);
+    });
+    body.appendChild(cardsWrap);
+    const leaveBtn = document.createElement('button');
+    leaveBtn.className = 'primary';
+    leaveBtn.textContent = 'Leave';
+    leaveBtn.addEventListener('click', leaveRoom);
+    body.appendChild(leaveBtn);
+  }
+
+  // Shared by Camine's Armory and Galdri's Magical Mysteries — same 2-step flow as Shrine's
+  // sacrifice (roomState.step), just "pick a weapon to buy" then "pick one to give up" instead
+  // of "pick a talisman to sacrifice" then "see the result." Weapon cards reuse the .talismanCard
+  // styling with no tier- class (weapons don't have Minor/Major tiers).
+  function renderWeaponRoom(body) {
+    if (roomState.step === 'discard') {
+      const p = document.createElement('p');
+      p.className = 'sub';
+      p.textContent = 'Leave one of your weapons behind to make room.';
+      body.appendChild(p);
+      const cardsWrap = document.createElement('div');
+      cardsWrap.className = 'talismanCards';
+      hero.carriedWeapons.forEach((id, idx) => {
+        const w = HERO_WEAPONS[id];
+        const card = document.createElement('div');
+        card.className = 'talismanCard';
+        card.innerHTML = `<div class="icon">${w.icon}</div><div class="name">${w.name}</div><div class="desc">${w.desc}</div>`;
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => finalizeWeaponDiscard(idx));
+        cardsWrap.appendChild(card);
+      });
+      body.appendChild(cardsWrap);
+      return;
+    }
+    const cardsWrap = document.createElement('div');
+    cardsWrap.className = 'talismanCards';
+    roomState.offers.forEach((offer, idx) => {
+      const w = HERO_WEAPONS[offer.weaponId];
+      const affordable = gold >= offer.price;
+      const card = document.createElement('div');
+      card.className = 'talismanCard' + (offer.bought ? ' duplicate' : !affordable ? ' unaffordable' : '');
+      const priceLine = `<div class="rewardLine">${offer.bought ? 'Bought' : offer.price + 'g'}</div>`;
+      card.innerHTML = `<div class="icon">${w.icon}</div><div class="name">${w.name}</div><div class="desc">${w.desc}</div>${priceLine}`;
+      if (!offer.bought) {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => buyWeaponRoomItem(idx));
       }
       cardsWrap.appendChild(card);
     });
@@ -4182,6 +4568,19 @@
         ctx.lineTo(e.x1 + (e.x2 - e.x1) * t, e.y1 + (e.y2 - e.y1) * t);
         ctx.stroke();
         ctx.restore();
+      } else if (e.type === 'magicMissileBolt') {
+        // Same trailing-streak shape as 'bolt'/'fireballBolt', tinted violet for arcane.
+        const t = 1 - a;
+        const tTail = Math.max(0, t - 0.18);
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, a * 2);
+        ctx.strokeStyle = '#b47cff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(e.x1 + (e.x2 - e.x1) * tTail, e.y1 + (e.y2 - e.y1) * tTail);
+        ctx.lineTo(e.x1 + (e.x2 - e.x1) * t, e.y1 + (e.y2 - e.y1) * t);
+        ctx.stroke();
+        ctx.restore();
       } else if (e.type === 'fireballBurst') {
         // Filled (not just stroked) so the AoE explosion reads as a blast, not a ping — sized to
         // roughly cover the target's hex plus its ring of 6 neighbors.
@@ -4570,7 +4969,11 @@
       .filter(({ e, dist }) => dist > effectiveAtkRange(e.hex, ROLE_RANGE[e.role]) || !hasLineOfSight(e.hex, target))
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
       .forEach(({ e }) => {
-        if (!advanceMoveProgress(e, terrainAt(e.hex), simDt)) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
+        // Whip's slow composes multiplicatively with terrain exactly like Iron Boots does for
+        // the hero (see resolveHeroMovement) — baked into simDt rather than a 3rd param on
+        // advanceMoveProgress.
+        const slowMult = e.slowTimer > 0 ? e.slowMult : 1;
+        if (!advanceMoveProgress(e, terrainAt(e.hex), simDt * slowMult)) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
         const losCheck = n => hasLineOfSight(n, target);
         const isSmart = ENEMY_TYPES[e.typeId] && ENEMY_TYPES[e.typeId].smart;
         // Range used for "how close is close enough" has to reflect the SAME fog-capped range
@@ -4608,11 +5011,17 @@
     const heroRange = effectiveAtkRange(heroHex, s.atkRange, trueSight); // e.g. Fog Patch caps this to 1, regardless of weapon
     if (hexDistance(heroHex, target.hex) <= heroRange && hasLineOfSight(heroHex, target.hex, trueSight)) return;
     // Terrain is symmetric — Debris slows the hero's own approach exactly like it slows enemies.
-    if (!advanceMoveProgress(hero, terrainAt(heroHex), simDt)) return;
+    // moveSpeedMult (Iron Boots) is the hero's own pace, composed multiplicatively with terrain
+    // exactly like Debris/Smoke already are, just baked into simDt rather than a 3rd param on
+    // advanceMoveProgress, since nothing else needs a per-unit speed multiplier there yet.
+    if (!advanceMoveProgress(hero, terrainAt(heroHex), simDt * s.moveSpeedMult)) return;
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
     terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through blocking terrain either
     const step = findStepToward(heroHex, target.hex, heroRange, occupied, n => hasLineOfSight(n, target.hex, trueSight));
-    if (step) heroHex = step;
+    // Duelist's Blade: any completed hex-step flips this on — checked unconditionally (cheap,
+    // harmless for every other weapon) rather than gating the tracking itself on which weapon is
+    // equipped, so switching TO Duelist's Blade mid-run doesn't need its own catch-up logic.
+    if (step) { heroHex = step; hero.advancingBonusActive = true; }
   }
 
   // Lets the player pick their own starting position before a fight — click any hex on the
@@ -4771,6 +5180,7 @@
         if (id === 'smokescreen') triggerSmokeScreen();
         if (id === 'fireball') triggerFireball();
         if (id === 'hurricane') triggerHurricane();
+        if (id === 'magicmissile') triggerMagicMissile();
       }
     });
 
@@ -4782,6 +5192,9 @@
     const enemyTarget = aggroHex();
     queue.slice().forEach(enemy => {
       if (phase !== 'combat' || !queue.includes(enemy)) return;
+      // Whip's slow — decays independently of stun/attack eligibility below, so it keeps
+      // ticking down even on a tick where the enemy doesn't get to act at all.
+      if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - simDt);
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
       if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
       if (hexDistance(enemy.hex, enemyTarget) > effectiveAtkRange(enemy.hex, ROLE_RANGE[enemy.role])) return; // e.g. fogged — capped to melee regardless of role
@@ -4813,6 +5226,7 @@
       const rate = e.type === 'cleaveSlice' ? 1.4 : e.type === 'slash' ? 3.5 : e.type === 'bolt' ? 2.8
         : e.type === 'shock' ? 4 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2
         : e.type === 'fireballBolt' ? 2.8 : e.type === 'fireballBurst' ? 1.0 : e.type === 'hurricane' ? 1.2
+        : e.type === 'magicMissileBolt' ? 2.8
         : e.type === 'falling' ? 0.55 : 2;
       e.life -= dt * rate;
     });
@@ -4838,6 +5252,7 @@
     heroHex = { ...HERO_SPAWN_HEX };
     heroTargetId = null;
     heroStance = 'advance'; // a fresh run starts from the default stance; it persists fight-to-fight after this
+    heroTargetMode = 'nearest'; // same persistence rule as heroStance
     phase = 'starterPick';
     dmgNumbers = [];
     effects = [];
@@ -4877,6 +5292,16 @@
     btn.addEventListener('click', () => {
       speed = Number(btn.dataset.speed);
       document.querySelectorAll('.speedBtn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+  document.querySelectorAll('.targetModeBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      heroTargetMode = btn.dataset.targetMode;
+      document.querySelectorAll('.targetModeBtn').forEach(b => b.classList.toggle('active', b === btn));
+      // Switching mode mid-fight should reflect immediately, not wait for the next tick's
+      // maybeRetargetHero (e.g. flipping to Random should re-roll right away, not just on the
+      // current target's death).
+      if (phase === 'combat') { heroTargetId = null; pickHeroTarget(); }
     });
   });
   document.querySelectorAll('.stanceBtn').forEach(btn => {
