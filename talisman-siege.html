@@ -100,9 +100,9 @@
   .overlaySubLabel { margin-top: 5px; padding-top: 4px; border-top: 1px solid #3a3a46; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; }
   .stanceBtnGroup { display: flex; gap: 6px; }
   .stanceBtnGroup .stanceBtn { flex: 1; }
-  /* 5 targeting-mode buttons don't fit one row at a readable size — wraps into 3+2 instead. */
+  /* 4 targeting-mode buttons (Furthest removed — see targetScore) fit one row at a readable size. */
   .targetModeBtnGroup { flex-wrap: wrap; }
-  .targetModeBtnGroup .targetModeBtn { flex: 1 1 28%; font-size: 11px; padding: 5px 4px; }
+  .targetModeBtnGroup .targetModeBtn { flex: 1 1 21%; font-size: 11px; padding: 5px 4px; }
   /* Sits in the same slot as the canvas (see renderPathModal) — the whole point is that the rest
      of the window (Hero/Equipped below) stays visible and clickable while choosing, instead of a
      full-screen modal blocking it. min-height roughly matches the canvas's own rendered
@@ -282,6 +282,9 @@
   .modalBox h2 { margin: 0 0 4px; color: #fff; font-size: 19px; }
   .modalBox p.sub { margin: 0 0 16px; color: #999; font-size: 13px; }
   .talismanCards { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  /* The bag-full discard choice's "convert instead" fallback — a plain button living alongside
+     the discard cards, so it gets its own row instead of trying to fit inline like a card. */
+  .bagFullSkipBtn { flex-basis: 100%; margin-top: 4px; }
   .talismanCard {
     background: #2b2b35;
     border: 1px solid #46465a;
@@ -309,6 +312,25 @@
   /* Compact synergy summary (see talismanTagsLine) — quieter than .desc since it's supplementary
      info, not the talisman's core effect. Only rendered when at least one tag applies. */
   .talismanCard .talismanTags { font-size: 10.5px; color: #6b8fb0; margin-top: 5px; font-style: italic; }
+  /* Non-combat room portrait — an image if the room has one (see NON_COMBAT_NODE_TYPES' `image`
+     field), otherwise its icon shown large in the same frame, so the layout looks identical
+     either way and swapping in real art later needs no other markup change. Used on both the
+     path-choice card (smaller) and the room's own modal header (large). */
+  .roomPortrait {
+    width: 100%;
+    height: 72px;
+    border-radius: 6px;
+    background: #1c1c24;
+    border: 1px solid #3a3a48;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .roomPortrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .roomPortrait.large { height: 150px; font-size: 60px; margin-bottom: 12px; }
   #gameOverModal .modalBox { text-align: center; }
   #gameOverModal .bigStat { font-size: 34px; color: #fff; font-weight: 700; margin: 6px 0 2px; }
   #gameOverModal .bestLine { color: #888; font-size: 13px; margin-bottom: 18px; }
@@ -387,19 +409,19 @@
       <div id="heroSection" class="windowSection">
         <h2>Hero</h2>
         <div id="hpBarOuter"><div id="hpBarInner"></div></div>
-        <div class="statRow"><span>HP</span><span id="hpText">100 / 100</span></div>
-        <div class="statRow"><span>Damage</span><span id="statDamage">-</span></div>
-        <div class="statRow"><span>Magic</span><span id="statMagic">-</span></div>
-        <div class="statRow"><span>Attack Speed</span><span id="statAtkSpeed">-</span></div>
-        <div class="statRow"><span>Armor</span><span id="statArmor">-</span></div>
-        <div class="statRow"><span>Potions</span><span id="statPotions">-</span></div>
+        <div class="statRow" title="Your current and maximum health. Reaching 0 ends the run, unless a talisman like Second Wind or a Potion saves you."><span>HP</span><span id="hpText">100 / 100</span></div>
+        <div class="statRow" title="Base physical damage per hit. Scales your weapon's own attack (except the Staff, which uses Magic instead) and any ability that reads Damage."><span>Damage</span><span id="statDamage">-</span></div>
+        <div class="statRow" title="Base magic power — a separate stat from Damage. Scales spell-like abilities (Fireball, Magic Missile) and the Staff's beam."><span>Magic</span><span id="statMagic">-</span></div>
+        <div class="statRow" title="Attacks per second — your weapon's own pace combined with any talisman or upgrade bonuses."><span>Attack Speed</span><span id="statAtkSpeed">-</span></div>
+        <div class="statRow" title="Flat damage subtracted from every hit you take, before Damage Reduction% (if unlocked) takes its own cut of what's left."><span>Armor</span><span id="statArmor">-</span></div>
+        <div class="statRow" title="Your Potion stock. Auto-drunk (one at a time) if a hit would otherwise kill you; drink manually between fights from the Shop's Consumables section."><span>Potions</span><span id="statPotions">-</span></div>
         <!-- These rows only appear once something has unlocked that stat (see isStatUnlocked) -->
-        <div class="statRow" id="statRowDamageReduction" style="display:none"><span>Damage Reduction</span><span id="statDamageReduction">-</span></div>
-        <div class="statRow" id="statRowCritChance" style="display:none"><span>Crit Chance</span><span id="statCrit">-</span></div>
-        <div class="statRow" id="statRowRegen" style="display:none"><span>HP Regen</span><span id="statRegen">-</span></div>
-        <div class="statRow" id="statRowLifesteal" style="display:none"><span>Lifesteal</span><span id="statLifesteal">-</span></div>
-        <div class="statRow" id="statRowThorns" style="display:none"><span>Thorns</span><span id="statThorns">-</span></div>
-        <div class="statRow" id="statRowDodge" style="display:none"><span>Dodge Chance</span><span id="statDodge">-</span></div>
+        <div class="statRow" id="statRowDamageReduction" style="display:none" title="Percentage of damage cut AFTER Armor's flat reduction already applies."><span>Damage Reduction</span><span id="statDamageReduction">-</span></div>
+        <div class="statRow" id="statRowCritChance" style="display:none" title="Chance for an attack to deal double damage."><span>Crit Chance</span><span id="statCrit">-</span></div>
+        <div class="statRow" id="statRowRegen" style="display:none" title="HP recovered automatically every second."><span>HP Regen</span><span id="statRegen">-</span></div>
+        <div class="statRow" id="statRowLifesteal" style="display:none" title="Percentage of damage you deal that's returned to you as healing."><span>Lifesteal</span><span id="statLifesteal">-</span></div>
+        <div class="statRow" id="statRowThorns" style="display:none" title="Percentage of incoming damage reflected back at the attacker — calculated after Armor and Damage Reduction already shrink it."><span>Thorns</span><span id="statThorns">-</span></div>
+        <div class="statRow" id="statRowDodge" style="display:none" title="Chance to fully avoid an incoming attack."><span>Dodge Chance</span><span id="statDodge">-</span></div>
       </div>
       <div id="movementSection" class="windowSection">
         <h2>Movement</h2>
@@ -410,7 +432,6 @@
         <h2>Targeting</h2>
         <div class="stanceBtnGroup targetModeBtnGroup">
           <button class="targetModeBtn active" data-target-mode="nearest" title="Always target whichever enemy is closest — re-checked every tick, can swap mid-fight.">Nearest</button>
-          <button class="targetModeBtn" data-target-mode="furthest" title="Always target whichever enemy is farthest away.">Furthest</button>
           <button class="targetModeBtn" data-target-mode="strongest" title="Always target whichever enemy currently has the most HP.">Strongest</button>
           <button class="targetModeBtn" data-target-mode="weakest" title="Always target whichever enemy currently has the least HP.">Weakest</button>
           <button class="targetModeBtn" data-target-mode="random" title="Target a random enemy — re-rolls only when your current target dies, not every tick.">Random</button>
@@ -485,6 +506,7 @@
 
 <div id="roomModal" class="modal hidden">
   <div class="modalBox">
+    <div id="roomModalPortrait"></div>
     <h2 id="roomModalTitle">Room</h2>
     <p class="sub" id="roomModalSub"></p>
     <div id="roomModalBody"></div>
@@ -566,8 +588,8 @@
   const HEX_ROW_SPACING = HEX_SIZE * Math.sqrt(3);
   const HEX_RADIUS = HEX_SIZE;
   const HERO_RADIUS = 19; // no weight tier of its own (yet) — sits at the "Medium" size for now
-  const ROLE_RANGE = { melee: 1, reach: 2, ranged: 5 };
-  const ROLE_COLOR = { melee: '#c25b5b', reach: '#d98f3f', ranged: '#8a5bd6' };
+  const ROLE_RANGE = { melee: 1, reach: 2, ranged: 5, support: 0 };
+  const ROLE_COLOR = { melee: '#c25b5b', reach: '#d98f3f', ranged: '#8a5bd6', support: '#dcc8e8' };
   const HERO_SPAWN_HEX = { row: -2, idx: 3 }; // vertical center of row -2 (a 7-tall row, so center is idx 3)
 
   function rowHeight(row) { return Math.abs(row) % 2 === 0 ? 7 : 6; }
@@ -670,8 +692,8 @@
     { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
     // Magic is a fully separate stat from Damage — same shape (flat, additive, 10 levels,
     // identical cost curve) but its own economy, so investing in one never helps the other.
-    // Only the Staff reads it today (see computeStats' scalesOffMagic branch); Fireball and
-    // Magic Missile scale off it too now instead of Damage (see TALISMANS).
+    // Wand and Staff both read it (see HERO_WEAPONS' magical flag); Fireball and Magic Missile
+    // scale off it too now instead of Damage (see TALISMANS).
     { id: 'magic',     name: 'Arcane Focus',     desc: '+2 Magic',               baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
 
     // --- Damage Reduction: unlocks once Armor is maxed, the scaling counterpart to Armor ---
@@ -714,6 +736,12 @@
   // else there) since it's spent inventory, not per-fight state.
   const POTION_COST = 10;
   const POTION_HEAL_AMOUNT = 25;
+
+  // Mage's Apprentice's shield — see shieldedHexKeys/shieldMultAgainst below and
+  // buildQueueFromEncounter's Apprentice placement pass for how a given shield's center is
+  // determined (the ranged ally it spawned next to, tracked via .protectsId).
+  const APPRENTICE_SHIELD_RADIUS = 2;
+  const APPRENTICE_SHIELD_DAMAGE_MULT = 0.5;
 
   // ---------------- Data: random battlefield terrain ----------------
   // Rolled fresh for every combat encounter (see generateTerrainForEncounter) — unlike Ice Wall/
@@ -765,6 +793,11 @@
   // Thorns is a deliberate outlier: scalesWith armor/damage-reduction, but INVERSELY — more
   // mitigation means less incoming damage left for Thorns to reflect. Left as a plain scalesWith
   // tag rather than inventing a signed/inverse schema for one entry; noted here instead.
+  // Momentum's stack counter stops climbing here — 20 stacks * 2%/stack already hits the +40%
+  // cap computeStats applies, so anything past this is pure dead-weight incrementing forever
+  // with zero further effect. Shared by the wave-clear increment and computeStats' own Math.min
+  // so the two numbers can't drift apart.
+  const MOMENTUM_MAX_STACKS = 20;
   const TALISMANS = [
     { id: 'bloodthirst', tier: 'minor', icon: '\u{1F489}', name: 'Bloodthirst',   desc: 'Heal for 10% of damage dealt.', unlocksStat: 'lifesteal',
       triggerType: 'onhit', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
@@ -784,7 +817,7 @@
       triggerType: 'reactive' },
     { id: 'adrenaline',  tier: 'minor', icon: '\u{1F525}', name: 'Adrenaline',    desc: '+1% damage per 2% missing HP (cap +40%).',
       triggerType: 'passive', modifies: ['dmg'], scalesWith: ['maxHP'] },
-    { id: 'killerinstinct', tier: 'minor', icon: '\u{1F3AF}', name: 'Killer Instinct', desc: '20% Crit Chance. Crits always deal double damage.', unlocksStat: 'critChance',
+    { id: 'killerinstinct', tier: 'minor', icon: '\u{1F3AF}', name: 'Killer Instinct', desc: '20% Crit Chance. Crits always deal double damage. Physical weapons only — magic weapons (Wand, Staff) never crit.', unlocksStat: 'critChance',
       triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
     { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+10% Damage.',
       triggerType: 'passive', modifies: ['dmg'] },
@@ -802,7 +835,7 @@
       triggerType: 'proc', frequencyGate: 'attackSpeed' },
     { id: 'goldentouch', tier: 'major', icon: '\u{1F4B0}', name: 'Golden Touch',  desc: '+30% gold earned, from kills and from combat rewards alike.',
       triggerType: 'passive', modifies: ['gold'] },
-    { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage.`,
+    { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage — melee only (1 hex). If your target isn't adjacent when the charge is ready, it waits, fully charged, until one is.`,
       triggerType: 'ability', scalesWith: ['dmg'], frequencyGate: 'cooldown' },
     { id: 'electricshock', tier: 'minor', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack jolts your target for bonus damage, arcing to every enemy adjacent to it too.',
       triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
@@ -814,7 +847,7 @@
       triggerType: 'setup' },
     { id: 'beartrap',    tier: 'minor', type: 'setup', icon: '\u{1FAA4}', name: 'Bear Trap', desc: 'Before the fight, place 1 hex. The first enemy to step on it takes a heavy hit and is rooted for 2s, then it’s spent. Affects enemies only — you can walk over it freely.',
       triggerType: 'setup', scalesWith: ['dmg'] },
-    { id: 'fireball',    tier: 'major', type: 'ability', icon: '\u{2604}\u{FE0F}', name: 'Fireball', desc: `Every ${ABILITY_CFG.fireball.cooldown}s, hurl a fireball at your target for full Magic damage, splashing 25% onto every hex adjacent to it — including you, if you're standing that close.`,
+    { id: 'fireball',    tier: 'major', type: 'ability', icon: '\u{2604}\u{FE0F}', name: 'Fireball', desc: `Every ${ABILITY_CFG.fireball.cooldown}s, hurl a fireball at your target for full Magic damage, splashing 25% onto every hex adjacent to it — including you, if you're standing that close. Requires line of sight to fire; if no target is in sight when it's ready, it waits, fully charged, until one is — the charge is never wasted.`,
       triggerType: 'ability', scalesWith: ['magic'], frequencyGate: 'cooldown' },
     { id: 'hurricane',   tier: 'major', type: 'ability', icon: '\u{1F32C}\u{FE0F}', name: "Hurricane's Might", desc: `Every ${ABILITY_CFG.hurricane.cooldown}s, a swirling gust pushes every enemy within ${HURRICANE_RADIUS} hexes outward and around you — anything shoved into a Chasm falls to its death.`,
       triggerType: 'ability', frequencyGate: 'cooldown' },
@@ -879,11 +912,24 @@
   // role stays 'reach' purely for the animation style, see HERO_WEAPON_VISUALS). `dmgMult`/
   // `atkSpeedMult` (both default 1) replace what used to be hardcoded per-weapon branches in
   // computeStats, so adding a new weapon's numbers never requires touching that function again.
-  // `magical: true` sorts a weapon into Galdri's Magical Mysteries instead of Camine's Armory
-  // (see NON_MAGICAL_WEAPON_IDS/MAGICAL_WEAPON_IDS) — purely a shop-flavor split. `scalesOffMagic:
-  // true` is the separate, purely mechanical flag (only the Staff has it): its dmgMult applies to
-  // the Magic stat instead of Damage, and heroAttack reads s.magic instead of s.dmg for it — a
-  // magical-FLAVORED weapon like the Wand can still deal ordinary physical damage.
+  // `magical: true` (Wand, Staff) means the weapon is a real magic weapon, not just a flavor
+  // tag: it sorts into Galdri's Magical Mysteries instead of Camine's Armory (see
+  // NON_MAGICAL_WEAPON_IDS/MAGICAL_WEAPON_IDS), its dmgMult applies to the Magic stat instead of
+  // Damage (heroAttack reads s.magic instead of s.dmg for it), and it never crits — Killer
+  // Instinct/crit rolls are a physical-weapon-only mechanic. A single flag drives all three,
+  // since every magic weapon should behave this way by construction, not by remembering to set
+  // a second flag on each new one Galdri's ever sells.
+
+  // Staff's ramp — see hero.staffStacks/heroAttack. Damage multiplier (applied to Magic, like
+  // every magical weapon) climbs linearly from STAFF_MIN_DMG_MULT to STAFF_MAX_DMG_MULT as
+  // consecutive hits on the SAME target go from 0 to STAFF_MAX_STACKS; switching targets resets
+  // the ramp to 0. Once the ramp is fully maxed, the beam also starts piercing (see heroAttack).
+  const STAFF_MAX_STACKS = 12;
+  const STAFF_MIN_DMG_MULT = 0.15;
+  const STAFF_MAX_DMG_MULT = 2.2;
+  const STAFF_PIERCE_FALLOFF = 0.75; // each enemy the fully-ramped beam pierces through takes 25% less than the last
+  const STAFF_PIERCE_ANGLE_TOLERANCE = Math.PI / 6; // ~30°, real pixel-angle cone from the hero — see heroAttack's pierce block for why (this grid has no clean "hex direction" concept)
+
   const HERO_WEAPONS = {
     sword:    { id: 'sword',    name: 'Sword',    icon: '\u{1F5E1}\u{FE0F}', role: 'melee',  desc: 'Balanced melee weapon — no tradeoffs.' },
     spear:    { id: 'spear',    name: 'Spear',    icon: '\u{1F531}', role: 'reach',  desc: '0.75x attack speed, 1.25x damage. Pierces in a line — the near hex takes a full hit, the target takes 0.75x.',
@@ -898,10 +944,10 @@
       desc: 'Ranged, no other tradeoffs — but after hitting your target, it bounces to up to 2 more enemies, full damage each, as long as each next enemy is within 2 hexes of the last and in clear line of sight (blocked by Ice Wall/Ruins, same as any shot).' },
     wand: { id: 'wand', name: 'Wand', icon: '\u{1FA84}', role: 'ranged', magical: true,
       dmgMult: 0.5, atkSpeedMult: 2,
-      desc: '2x attack speed, 0.5x damage per hit.' },
-    staff: { id: 'staff', name: 'Staff', icon: '\u{1F52E}', role: 'ranged', magical: true, scalesOffMagic: true,
-      dmgMult: 0.25, atkSpeedMult: 4,
-      desc: 'A continuous purple beam rather than single swings — very fast, low-damage hits (scaling off Magic, not Damage) that still count individually for on-hit talismans like Bloodthirst or Electric Shock, they just land far more often.' },
+      desc: '2x attack speed, 0.5x Magic damage per hit — the fast, reliable option. Never crits (no magic weapon does).' },
+    staff: { id: 'staff', name: 'Staff', icon: '\u{1F52E}', role: 'ranged', magical: true,
+      atkSpeedMult: 4,
+      desc: `A channeled beam that ramps from weak to devastating the longer you hold it on the same target — ${STAFF_MIN_DMG_MULT}x to ${STAFF_MAX_DMG_MULT}x Magic damage over ${STAFF_MAX_STACKS} hits, resetting if you switch targets. Once fully ramped, the beam pierces through your target, hitting every enemy behind it in a line for 25% less each, until line of sight breaks. Never crits (no magic weapon does).` },
   };
   const HERO_WEAPON_IDS = Object.keys(HERO_WEAPONS);
   const NON_MAGICAL_WEAPON_IDS = HERO_WEAPON_IDS.filter(id => !HERO_WEAPONS[id].magical);
@@ -915,12 +961,16 @@
   function weaponTooltip(id) {
     const w = HERO_WEAPONS[id];
     const s = computeStats(id);
-    const lines = [
-      w.desc,
-      `Damage: ${Math.round(w.scalesOffMagic ? s.magic : s.dmg)}`,
+    const lines = [w.desc];
+    if (id === 'staff') {
+      lines.push(`Damage: ${Math.round(s.magic * STAFF_MIN_DMG_MULT)} unramped → ${Math.round(s.magic * STAFF_MAX_DMG_MULT)} fully ramped`);
+    } else {
+      lines.push(`Damage: ${Math.round(w.magical ? s.magic * (w.dmgMult || 1) : s.dmg)}`);
+    }
+    lines.push(
       `Attack Speed: ${s.atkSpeed.toFixed(2)}/s`,
       `Range: ${s.atkRange} hex${s.atkRange > 1 ? 'es' : ''}`,
-    ];
+    );
     if (w.effect) lines.push(`Effect: ${w.effect}`);
     return lines.join('\n');
   }
@@ -933,12 +983,16 @@
     sword:    { weaponShape: 'cross', weaponBaseReach: 0.6, weaponLunge: 0.5, weaponBlade: 0.55, weaponTail: 0.15, weaponGuard: 0.18 },
     spear:    { weaponShape: 'cross', tipShape: 'triangle', tipWidth: 0.09, weaponBaseReach: 0.75, weaponWindup: 0.3, weaponLunge: 0.65, weaponBlade: 1.65, weaponTail: 0.06, weaponGuard: 0.06 },
     crossbow: { weaponShape: 'crossbow', weaponBaseReach: 0.4, weaponWindup: 0.32, weaponWindupFrac: 0.75, weaponLunge: 0.1 },
-    // The 5 new weapons reuse the 2 existing weaponShape dispatches (cross/crossbow) rather than
-    // adding new drawing code — just distinct enough size params to read as different pieces.
+    // Most of the 5 new weapons reuse the 2 existing weaponShape dispatches (cross/crossbow)
+    // rather than adding new drawing code — just distinct enough size params to read as
+    // different pieces. Boomerang gets its own dedicated 'boomerang' shape (see
+    // drawBoomerangWeapon) since a reused crossbow silhouette doesn't read as a boomerang at all.
     duelistblade: { weaponShape: 'cross', weaponBaseReach: 0.6, weaponLunge: 0.55, weaponBlade: 0.6, weaponTail: 0.12, weaponGuard: 0.22, weaponColor: '#f0d878' },
     whip:         { weaponShape: 'cross', weaponBaseReach: 0.7, weaponWindup: 0.25, weaponLunge: 0.6, weaponBlade: 1.4, weaponWidth: 0.05, weaponTail: 0.02, weaponGuard: 0.04, weaponColor: '#c48a4a' },
-    boomerang:    { weaponShape: 'crossbow', weaponBaseReach: 0.45, weaponWindup: 0.28, weaponWindupFrac: 0.7, weaponLunge: 0.15, weaponColor: '#d4a24c' },
-    wand:         { weaponShape: 'cross', weaponBaseReach: 0.5, weaponLunge: 0.35, weaponBlade: 0.35, weaponWidth: 0.08, weaponTail: 0.02, weaponGuard: 0.03, weaponColor: '#b47cff' },
+    boomerang:    { weaponShape: 'boomerang', weaponBaseReach: 0.5, weaponWindup: 0.25, weaponWindupFrac: 0.7, weaponLunge: 0.35, weaponBlade: 0.55, weaponWidth: 0.1, weaponColor: '#d4a24c' },
+    // Red throughout — held weapon AND its orb projectile — so the Wand reads as a fully
+    // distinct identity from the Staff's purple, even though both share the 'cross' shape.
+    wand:         { weaponShape: 'cross', weaponBaseReach: 0.5, weaponLunge: 0.35, weaponBlade: 0.35, weaponWidth: 0.08, weaponTail: 0.02, weaponGuard: 0.03, weaponColor: '#ff4d4d' },
     staff:        { weaponShape: 'cross', weaponBaseReach: 0.55, weaponLunge: 0.3, weaponBlade: 0.85, weaponWidth: 0.09, weaponTail: 0.04, weaponGuard: 0.05, weaponColor: '#b47cff' },
   };
 
@@ -977,15 +1031,18 @@
   const FLOOR_LENGTH = 12;
   function isNonCombatSlot(pos) { return pos % 4 === 0; }
 
-  // The non-combat room types — always all of them, shuffled, at every reserved slot. More
+  // The non-combat room types — always all of them, in this fixed order, at every reserved slot
+  // (Nate's explicit ask: a consistent order reads clearer than a reshuffled one every time). More
   // variety (multiple inns with different boons, etc.) can grow this list later; the dispatch in
-  // generatePathChoices/choosePath/enterRoomVisit doesn't care how many there are.
+  // generatePathChoices/choosePath/enterRoomVisit doesn't care how many there are. `image` is an
+  // optional data: URI or URL — see roomPortraitHTML — that overrides `icon` on both the
+  // path-choice card and the room's own modal once real art exists; null means "use the icon."
   const NON_COMBAT_NODE_TYPES = [
-    { roomKey: 'spellweaver', tierLabel: "Spellweaver's Wares", desc: 'A hollow-eyed peddler hawks trinkets stitched from the dead.' },
-    { roomKey: 'inn', tierLabel: "Wanderer's Inn", desc: 'A guttering fire in the dark — the only warmth for miles.' },
-    { roomKey: 'shrine', tierLabel: 'Shrine of Offering', desc: 'A blood-slicked altar demands its due.' },
-    { roomKey: 'camine', tierLabel: "Camine's Armory", desc: 'A grizzled armorer eyes your gear with open contempt.' },
-    { roomKey: 'galdri', tierLabel: "Galdri's Magical Mysteries", desc: 'A cackling hedge-mage juggles wares that hum with unstable magic.' },
+    { roomKey: 'spellweaver', tierLabel: "Spellweaver's Wares", desc: 'A hollow-eyed peddler hawks trinkets stitched from the dead.', icon: '\u{1F9D9}', image: null },
+    { roomKey: 'inn', tierLabel: "Wanderer's Inn", desc: 'A guttering fire in the dark — the only warmth for miles.', icon: '\u{1F3D5}\u{FE0F}', image: null },
+    { roomKey: 'shrine', tierLabel: 'Shrine of Offering', desc: 'A blood-slicked altar demands its due.', icon: '\u{1FA78}', image: null },
+    { roomKey: 'camine', tierLabel: "Camine's Armory", desc: 'A grizzled armorer eyes your gear with open contempt.', icon: '\u{2694}\u{FE0F}', image: null },
+    { roomKey: 'galdri', tierLabel: "Galdri's Magical Mysteries", desc: 'A cackling hedge-mage juggles wares that hum with unstable magic.', icon: '\u{1F52E}', image: null },
   ];
   const GOLD_CFG = { perKillBase: 2, perKillPerWave: 0.5, waveClearBase: 5, waveClearPerWave: 2 };
 
@@ -1035,13 +1092,33 @@
   // exists that avoids it, falling back to walking straight through if that's the only way
   // (see resolveEnemyMovement's debrisAvoidingOccupied pass). Nate's explicit per-type call:
   // Warband Leader/Knight/Archer are smart, Wretch/Raider/Brute are mindless.
+  // `desc` (only set where there's a real mechanic worth flagging — see the setup-phase enemy
+  // tooltip, enemyTooltipText) is purely informational; nothing in combat reads it.
   const ENEMY_TYPES = {
     wretch: { name: 'Wretch',         role: 'melee',  weight: 'light',    dmgMult: 0.7, moveSpeedMult: 1.3 },
     raider: { name: 'Raider',         role: 'melee',  weight: 'medium',   dmgMult: 1.0, moveSpeedMult: 1.0 },
-    leader: { name: 'Warband Leader', role: 'reach',  weight: 'heavy',    dmgMult: 1.7, moveSpeedMult: 1.0, smart: true },
+    leader: { name: 'Warband Leader', role: 'reach',  weight: 'heavy',    dmgMult: 1.7, moveSpeedMult: 1.0, smart: true,
+      desc: 'Reach weapon — attacks from 2 hexes away, and hits harder than a typical grunt.' },
     knight: { name: 'Knight',         role: 'melee',  weight: 'heavy',    dmgMult: 1.0, moveSpeedMult: 0.8, smart: true },
-    archer: { name: 'Archer',         role: 'ranged', weight: 'light',    dmgMult: 0.5, atkIntervalMult: 0.5, moveSpeedMult: 1.1, smart: true },
+    archer: { name: 'Archer',         role: 'ranged', weight: 'light',    dmgMult: 0.5, atkIntervalMult: 0.5, moveSpeedMult: 1.1, smart: true,
+      desc: 'Fires from range at half damage, but twice as often.' },
     brute:  { name: 'Brute',          role: 'melee',  weight: 'miniboss', dmgMult: 1.6, moveSpeedMult: 0.7 },
+    // A hard-hitting caster: atkIntervalMult 2.5 against the 1.2s baseline lands exactly on the
+    // requested "every 3 seconds." rangeOverride (Infinity) is the enemy-side counterpart to the
+    // hero weapons' own rangeOverride (Whip) — see enemyBaseRange, threaded through every place
+    // that used to read ROLE_RANGE[e.role] directly for an enemy's own attack/approach range.
+    // Obeys LOS like anything else (hasLineOfSight is never bypassed by range alone), it just
+    // never gets range-capped the way a normal 'ranged' unit would.
+    mage:   { name: 'Mage',           role: 'ranged', weight: 'light',    dmgMult: 3.0, atkIntervalMult: 2.5, smart: true, rangeOverride: Infinity,
+      desc: 'Fires a heavy lightning bolt every 3s. Unlimited range as long as it has a clear line of sight.' },
+    // A pure support unit — dmgMult 0 combined with ROLE_RANGE.support = 0 (see there) means it
+    // can never actually land a hit (min-1-damage clamp aside, hexDistance <= 0 is never true
+    // except standing exactly on the hero's own hex, which the occupied-hex collision rule never
+    // allows). It still approaches the hero like anything else — there's no bespoke "stay near
+    // your ward" movement behavior — its real job (the shield) works independently of that; see
+    // buildQueueFromEncounter's placement pass and shieldedHexKeys/shieldMultAgainst.
+    apprentice: { name: "Mage's Apprentice", role: 'support', weight: 'light', dmgMult: 0, moveSpeedMult: 1.0,
+      desc: "Shields the nearest ranged ally within 2 hexes — attacking it from outside that shield deals 50% less damage. Deals no damage itself." },
   };
 
   // Per-unit opts fed straight into drawFacingUnit (see its weaponShape dispatch) — this is
@@ -1080,6 +1157,12 @@
     brute: {
       weaponShape: 'club',
       weaponBaseReach: 0.55, weaponWindup: 0.35, weaponWindupFrac: 0.75, weaponLunge: 0.55, weaponBlade: 0.5, weaponWidth: 0.15,
+    },
+    mage: {
+      weaponShape: 'cross', weaponBaseReach: 0.5, weaponWindup: 0.3, weaponWindupFrac: 0.7, weaponLunge: 0.3, weaponBlade: 0.7, weaponWidth: 0.1, weaponColor: '#7cff8f',
+    },
+    apprentice: {
+      weaponShape: 'cross', weaponBaseReach: 0.4, weaponBlade: 0.2, weaponWidth: 0.08, weaponColor: '#dcc8e8',
     },
   };
 
@@ -1166,6 +1249,18 @@
         { role: 'reach', weight: 'heavy', count: 1 },
       ],
     },
+    // Pairs a caster (Archer or Mage — whichever the roll picks) with a Mage's Apprentice, whose
+    // own placement (see buildQueueFromEncounter) always lands it next to whichever ranged unit
+    // actually spawned, preferring the Mage by name if the roll happened to produce one. The
+    // Apprentice's `support` role is otherwise unused by any other type — see ROLE_RANGE.support
+    // — so this slot can never accidentally pick anything else.
+    coven: {
+      label: 'Coven', hordeEligible: true, forceMultiSide: false,
+      slots: [
+        { role: 'ranged', weight: 'light', countFn: depth => baseEncounterCount(depth) },
+        { role: 'support', weight: 'light', count: 1 },
+      ],
+    },
   };
   const ARCHETYPE_KEYS = Object.keys(ARCHETYPES);
 
@@ -1174,6 +1269,7 @@
     pack: ['A war-band of the damned circles, one among them hitting harder than the rest.', 'Raiders close in, taking their cue from a hardened leader.'],
     skirmish: ['A knight and archer hold the line together.', 'Steel up front, arrows from behind — a disciplined pair.'],
     ambush: ['Shapes move on both sides — you are already surrounded.', 'The horde has boxed you in from every direction.'],
+    coven: ['A caster mutters over a warding circle, an acolyte hovering close at hand.', 'Robed figures huddle around a shimmer in the air — someone is being protected.'],
   };
   function pickArchetypeFlavor(key) {
     const pool = ARCHETYPE_FLAVOR[key] || ARCHETYPE_FLAVOR.pack;
@@ -1265,11 +1361,12 @@
 
   // 3 of the 4 archetypes, shuffled — no fixed order, since these aren't a difficulty ladder
   // to keep visually consistent the way Easy/Standard/Dangerous were; it's fine (good, even)
-  // for it to be unpredictable which 3 show up. Non-combat slots always offer all three room
-  // types, shuffled — see NON_COMBAT_NODE_TYPES.
+  // for it to be unpredictable which 3 show up. Non-combat slots always offer every room type in
+  // NON_COMBAT_NODE_TYPES' own declared order — deliberately NOT shuffled, unlike combat, since
+  // Nate's ask here was specifically for a consistent, predictable order across every shop visit.
   function generatePathChoices(depth, floorPosition) {
     if (isNonCombatSlot(floorPosition)) {
-      return shuffle(NON_COMBAT_NODE_TYPES.map(r => Object.assign({ type: 'noncombat' }, r)));
+      return NON_COMBAT_NODE_TYPES.map(r => Object.assign({ type: 'noncombat' }, r));
     }
     return shuffle(ARCHETYPE_KEYS).slice(0, 3).map(k => generateEncounterOption(depth, k));
   }
@@ -1500,7 +1597,7 @@
   // anything already in range) so you can turtle behind an Ice Wall until, say, an archer starts
   // shooting you and it's worth pushing out. Reset to 'advance' at the start of every fight.
   let heroStance = 'advance';
-  // 'nearest' | 'furthest' | 'strongest' | 'weakest' | 'random' — see pickHeroTarget/
+  // 'nearest' | 'strongest' | 'weakest' | 'random' — see pickHeroTarget/
   // maybeRetargetHero. Persists fight-to-fight exactly like heroStance, only resets on a full
   // New Attempt (see restart()).
   let heroTargetMode = 'nearest';
@@ -1544,6 +1641,7 @@
       restBuffFightsRemaining: 0, // Wanderer's Inn "Rest" — see computeStats and waveCleared
       poisonStacks: 0, plaguedDmgRef: 0, // Plagued affix — see enemyAttack and simulationStep, reset each fight
       decoy: null, // After Image's decoy: { hex, hp, maxHp } while up — see triggerAfterImage, reset each fight
+      staffStacks: 0, staffStackTargetId: null, // Staff's ramp — see heroAttack, reset each fight and on a target switch
     };
   }
 
@@ -1608,8 +1706,8 @@
     let maxHP = 100 + 15 * u.maxHP;
     let armor = 0 + 1 * u.armor;
     // Separate from `dmg` entirely — its own economy (see UPGRADES' `magic` entry), read only by
-    // weapons/talismans that explicitly scale off it (Staff, Fireball, Magic Missile — see
-    // HERO_WEAPONS' scalesOffMagic and TALISMANS' scalesWith below).
+    // weapons/talismans that explicitly scale off it (Wand, Staff, Fireball, Magic Missile — see
+    // HERO_WEAPONS' magical flag and TALISMANS' scalesWith below).
     let magic = 10 + 2 * u.magic;
     // Damage Reduction: simple additive now, capped at 5 levels × 10% = 50% max.
     let damageReductionPct = Math.min(0.5, 0.10 * u.kineticWard);
@@ -1631,10 +1729,14 @@
     // Every weapon's own dmg/attack-speed tradeoff now lives as data on HERO_WEAPONS
     // (dmgMult/atkSpeedMult, both default 1) instead of a hardcoded branch per weapon id here —
     // the Spear/Crossbow tradeoffs below are unchanged, just data-driven so new weapons (Whip,
-    // Wand, Staff, ...) don't need this function touched again. scalesOffMagic (only the Staff)
-    // routes its dmgMult onto the separate Magic stat instead of Damage.
-    if (equippedW.scalesOffMagic) magic *= (equippedW.dmgMult || 1);
-    else dmg *= (equippedW.dmgMult || 1);
+    // Wand, Staff, ...) don't need this function touched again. Deliberately NOT applied to
+    // `magic` for magical weapons (Wand, Staff) — Magic has to stay a pure character stat,
+    // identical no matter what's equipped, or Fireball/Magic Missile (which read this same
+    // returned `magic`) would get silently nerfed just from having a magic weapon equipped, which
+    // is exactly the bug Nate caught (Magic showing 10→3 on equip). Every magic weapon's own
+    // dmgMult (and, for the Staff, its ramp — see heroAttack) applies locally on the weapon's own
+    // hit instead, never touching this shared stat.
+    dmg *= (equippedW.magical ? 1 : (equippedW.dmgMult || 1));
     atkSpeed *= (equippedW.atkSpeedMult || 1);
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
@@ -1665,7 +1767,7 @@
     if (has('battlefury')) dmg *= 1.10;
     if (has('ironvitality')) maxHP *= 1.25;
     if (has('ironboots')) { armor += 5; moveSpeedMult *= 0.5; }
-    if (has('momentum')) atkSpeed *= (1 + Math.min(0.40, 0.02 * (hero.talismanStacks.momentum || 0)));
+    if (has('momentum')) atkSpeed *= (1 + 0.02 * Math.min(MOMENTUM_MAX_STACKS, hero.talismanStacks.momentum || 0));
     if (has('adrenaline')) {
       const missingPct = 1 - hero.hp / maxHP;
       dmg *= (1 + Math.min(0.4, missingPct / 2));
@@ -1764,9 +1866,37 @@
     let candidates = shuffle(allHexes().filter(h => !(h.row === heroHex.row && h.idx === heroHex.idx)));
     if (enc.forceMultiSide) candidates = orderForMultiSideSpawn(candidates);
     let ci = 0;
-    enc.units.forEach(u => {
+    // Mage's Apprentice doesn't take a random candidate hex like everything else — it spawns
+    // adjacent to whichever ranged ally it's shielding (see its own placement pass below), so
+    // it's held back and placed last, once every other unit (including that ranged ally) is
+    // already on the board.
+    const normalUnits = enc.units.filter(u => u.type !== 'apprentice');
+    const apprenticeUnits = enc.units.filter(u => u.type === 'apprentice');
+    normalUnits.forEach(u => {
       for (let i = 0; i < u.count && ci < candidates.length; i++, ci++) {
         list.push(makeEnemy(u.hp, u.dmg, { role: u.role, atkInterval: u.atkInterval, moveSpeed: u.moveSpeed, weight: u.weight, typeId: u.type, hex: candidates[ci] }));
+      }
+    });
+    apprenticeUnits.forEach(u => {
+      for (let i = 0; i < u.count; i++) {
+        const occupiedKeys = new Set(list.map(e => hexKey(e.hex.row, e.hex.idx)));
+        // Prioritize a Mage by name if one is present; otherwise any ranged ally already placed.
+        const rangedAllies = list.filter(e => e.role === 'ranged');
+        const protectedUnit = rangedAllies.find(e => e.typeId === 'mage') || rangedAllies[0];
+        let hex = null;
+        if (protectedUnit) {
+          const freeNeighbors = neighborsOf(protectedUnit.hex.row, protectedUnit.hex.idx)
+            .filter(h => !occupiedKeys.has(hexKey(h.row, h.idx)) && !(h.row === heroHex.row && h.idx === heroHex.idx));
+          hex = freeNeighbors[Math.floor(Math.random() * freeNeighbors.length)] || null;
+        }
+        while (!hex && ci < candidates.length) {
+          if (!occupiedKeys.has(hexKey(candidates[ci].row, candidates[ci].idx))) hex = candidates[ci];
+          ci++;
+        }
+        if (!hex) return; // board somehow completely full — extremely unlikely on an 85-hex board
+        const apprentice = makeEnemy(u.hp, u.dmg, { role: u.role, atkInterval: u.atkInterval, moveSpeed: u.moveSpeed, weight: u.weight, typeId: u.type, hex });
+        if (protectedUnit) apprentice.protectsId = protectedUnit.id; // see shieldedHexKeys
+        list.push(apprentice);
       }
     });
     return list;
@@ -1806,6 +1936,14 @@
   function spawnCleaveSlice(points) {
     effects.push({ type: 'cleaveSlice', points, life: 1 });
   }
+  // A brief red glow filling each of the 3 struck hexes, on top of the arc slice above — Nate's
+  // ask, so the 3 hexes actually being hit read clearly even for someone not tracking the arc
+  // animation itself. One effect per hex rather than one effect covering all 3, since hexes can
+  // be non-adjacent-looking on screen (flank/target/flank) and a single shape couldn't cleanly
+  // cover all three at once.
+  function spawnCleaveGlow(hexCenters) {
+    hexCenters.forEach(({ x, y }) => effects.push({ type: 'cleaveGlow', x, y, life: 1 }));
+  }
   // The Archer's bolt — a short streak that travels from where it was fired to where its
   // target was at that moment (not tracked live, same simplification every other hit-feedback
   // effect already makes). Drawn as a segment interpolated along that line by (1 - life).
@@ -1819,6 +1957,13 @@
     const midX = (x1 + x2) / 2 + (Math.random() - 0.5) * 14;
     const midY = (y1 + y2) / 2 + (Math.random() - 0.5) * 14;
     effects.push({ type: 'shock', x1, y1, x2, y2, midX, midY, life: 1 });
+  }
+  // The Mage's lightning zap — same jagged-zigzag shape as Electric Shock's bolt, just its own
+  // green tint so it reads as a distinct spell rather than the same talisman effect.
+  function spawnMageZap(x1, y1, x2, y2) {
+    const midX = (x1 + x2) / 2 + (Math.random() - 0.5) * 14;
+    const midY = (y1 + y2) / 2 + (Math.random() - 0.5) * 14;
+    effects.push({ type: 'mageZap', x1, y1, x2, y2, midX, midY, life: 1 });
   }
   // A brief puff at both hexes when the Hero swaps with an After Image decoy.
   function spawnSmoke(x, y) {
@@ -1844,16 +1989,35 @@
   function spawnFireballBurst(x, y) {
     effects.push({ type: 'fireballBurst', x, y, life: 1 });
   }
-  // Magic Missile's bolts — same trailing-streak shape as Fireball's own, tinted violet so it
-  // reads as arcane rather than fire.
+  // Magic Missile's bolts — same trailing-streak shape as Fireball's own, tinted yellow so it
+  // reads as arcane rather than fire, and distinct from the Staff's own purple beam.
   function spawnMagicMissileBolt(x1, y1, x2, y2) {
     effects.push({ type: 'magicMissileBolt', x1, y1, x2, y2, life: 1 });
+  }
+  // The Wand's shot — a small traveling orb (not a streak) tinted red, so its rapid-fire hits
+  // read as distinct little projectiles rather than arrows or a beam.
+  function spawnWandOrb(x1, y1, x2, y2) {
+    effects.push({ type: 'wandOrb', x1, y1, x2, y2, life: 1 });
   }
 
   // Hurricane's Might's wind ring — a dashed circle (vs. Shockwave's solid one) so the two read
   // as different effects at a glance even though both are "expanding ring centered on the hero."
   function spawnHurricaneRing(x, y) {
     effects.push({ type: 'hurricane', x, y, life: 1 });
+  }
+
+  // The Boomerang's throw — one continuous spinning flight through every waypoint it actually
+  // hit (see heroAttack's boomerang block), ending back at the hero. Segment lengths/total are
+  // precomputed once here (points never change after this) rather than every draw frame.
+  function spawnBoomerangThrow(points) {
+    const segLens = [];
+    let total = 0;
+    for (let i = 1; i < points.length; i++) {
+      const d = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+      segLens.push(d);
+      total += d;
+    }
+    effects.push({ type: 'boomerangThrow', points, segLens, total: total || 1, life: 1 });
   }
 
   function hexColorToRgb(hex) {
@@ -1897,28 +2061,81 @@
   // actually isn't anymore. Random isn't scored here at all (see pickHeroTarget/maybeRetargetHero
   // — a real per-tick re-roll would look identical to the hero doing nothing coherent).
   function targetScore(e) {
-    const d = hexDistance(e.hex, heroHex);
-    if (heroTargetMode === 'furthest') return -d;
     if (heroTargetMode === 'strongest') return -e.hp;
     if (heroTargetMode === 'weakest') return e.hp;
-    return d; // 'nearest'
+    return hexDistance(e.hex, heroHex); // 'nearest'
+  }
+
+  // Whether the hero could ACTUALLY hit this enemy right now, from its current hex — in role
+  // range and LOS, fog/True-Sight aware, exactly the same check the real attack-eligibility test
+  // in simulationStep uses. Nate's report: raw hexDistance alone (what targetScore above uses)
+  // has no idea a wall/chasm is in the way, so a "closer" enemy hiding behind one could out-rank
+  // an actually-hittable enemy under every mode, including plain Nearest — the hero would lock
+  // onto (or continuously re-lock onto) a target it visibly couldn't land a hit on. Worst under
+  // Hold specifically because the hero never physically moves to accidentally self-correct the
+  // way it might while Advancing.
+  function isAttackableNow(e, s, trueSight) {
+    return hexDistance(heroHex, e.hex) <= effectiveAtkRange(heroHex, s.atkRange, trueSight, e.hex)
+      && hasLineOfSight(heroHex, e.hex, trueSight);
+  }
+
+  // Attackable-right-now always outranks not-attackable, full stop, UNLESS the hero's current
+  // atkRange is 1 (melee) — the tier check exists purely to stop the hero locking onto an enemy
+  // it can visibly see is unreachable (behind a wall, or too far), but at range 1 that can never
+  // happen: two adjacent hexes have no hex "between" them for a wall to occupy, and fog's own
+  // range cap never drops below 1 either (see effectiveAtkRange), so "attackable" is ALWAYS just
+  // "is anything touching me" for melee. Left in place, that collapses every mode except Nearest
+  // into "whatever's adjacent wins, no matter what," since nothing else can ever compete — which
+  // is exactly the bug Nate reported (Furthest ignoring an Archer to fight an adjacent, harmless
+  // Mage's Apprentice). Skipping the tier check at range 1 restores the mode as the real ranking
+  // for melee, with no correctness cost, since there's nothing for the tier check to protect
+  // against there. `s.atkRange` already reflects any talisman that extends it (Marksman's
+  // Reach), so a Sword+Marksman's Reach hero correctly keeps the tier check once its range is 2.
+  function isBetterTarget(a, b, s, trueSight) {
+    if (s.atkRange > 1) {
+      const aAtk = isAttackableNow(a, s, trueSight), bAtk = isAttackableNow(b, s, trueSight);
+      if (aAtk !== bAtk) return aAtk;
+    }
+    // Used for a FRESH pick (see pickHeroTarget) where there's no existing target to be biased
+    // toward, so an id tie-break (oldest on the field) gives a stable, deterministic choice among
+    // true ties.
+    const sa = targetScore(a), sb = targetScore(b);
+    if (sa !== sb) return sa < sb;
+    return a.id < b.id;
+  }
+
+  // Whether `a` is a genuine, STRICT improvement over the hero's CURRENT target `b` — no id
+  // tie-break here, unlike isBetterTarget above. Nate's report: a new enemy walking to the exact
+  // same hex distance as whatever the hero is already fighting was stealing the target purely
+  // because its id happened to sort lower, even though it's not actually any closer — "nearest"
+  // should only ever switch you off a target for something genuinely closer, not merely
+  // equidistant. Becoming attackable when the current target isn't is still always a real
+  // improvement (not a tie) since it's a hard tier change, not a same-tier score comparison — but
+  // only when the tier check even applies; see isBetterTarget's comment for why it's skipped at
+  // melee range (atkRange === 1).
+  function isStrictlyBetterTarget(a, b, s, trueSight) {
+    if (s.atkRange > 1) {
+      const aAtk = isAttackableNow(a, s, trueSight), bAtk = isAttackableNow(b, s, trueSight);
+      if (aAtk !== bAtk) return aAtk;
+    }
+    return targetScore(a) < targetScore(b);
   }
 
   // Picks a fresh target from scratch — called whenever there is none (fight start, or the
-  // current one just died, see killEnemy nulling heroTargetId). Random draws uniformly from the
-  // whole queue; every other mode picks whichever enemy scores best under targetScore, ties
-  // breaking on lowest id (whichever enemy has been on the field longest) same as before.
+  // current one just died, see killEnemy nulling heroTargetId). Random prefers an attackable-now
+  // enemy if any exist (same tiering as every other mode), otherwise draws uniformly from
+  // whichever enemies there are, since there's nothing "chase-worthy" to weigh yet.
   function pickHeroTarget() {
     if (!queue.length) { heroTargetId = null; return; }
+    const s = computeStats(), trueSight = isEquipped('truesight');
     if (heroTargetMode === 'random') {
-      heroTargetId = queue[Math.floor(Math.random() * queue.length)].id;
+      const attackable = queue.filter(e => isAttackableNow(e, s, trueSight));
+      const pool = attackable.length ? attackable : queue;
+      heroTargetId = pool[Math.floor(Math.random() * pool.length)].id;
       return;
     }
-    let best = null, bestScore = Infinity;
-    queue.forEach(e => {
-      const sc = targetScore(e);
-      if (sc < bestScore || (sc === bestScore && best && e.id < best.id)) { bestScore = sc; best = e; }
-    });
+    let best = queue[0];
+    queue.forEach(e => { if (isBetterTarget(e, best, s, trueSight)) best = e; });
     heroTargetId = best.id;
   }
   function currentHeroTarget() {
@@ -1926,13 +2143,13 @@
     return queue.find(e => e.id === heroTargetId) || null;
   }
 
-  // Continuous live re-evaluation — every simulationStep tick, whichever enemy currently scores
-  // best under the selected mode becomes the target, full stop. This is a deliberately bigger
-  // change from the old sticky-with-a-margin behavior: a mode can now swap the hero off a target
-  // it's mid-fight with (e.g. "Furthest" will happily ignore an enemy that just became adjacent
-  // and is actively hitting the hero, since that enemy is now the CLOSEST, which scores worst
-  // under Furthest) — accepted as the tradeoff for "the mode IS the targeting rule" instead of
-  // the old distance-margin/attacker-priority special-casing.
+  // Continuous live re-evaluation — every simulationStep tick, whichever enemy currently ranks
+  // best (attackable-tier first, then the selected mode) becomes the target, full stop. This is
+  // a deliberately bigger change from the old sticky-with-a-margin behavior: a mode can now swap
+  // the hero off a target it's mid-fight with, e.g. Strongest will happily abandon a weak enemy
+  // it just closed to melee range with the instant a tougher one also comes into range — accepted
+  // as the tradeoff for "the mode IS the targeting rule" instead of the old distance-
+  // margin/attacker-priority special-casing.
   function maybeRetargetHero() {
     const target = currentHeroTarget();
     if (!target) { pickHeroTarget(); return; }
@@ -1940,11 +2157,9 @@
     // re-picks fresh the instant that target dies, via the !target branch above (killEnemy nulls
     // heroTargetId — see there).
     if (heroTargetMode === 'random') return;
-    let best = target, bestScore = targetScore(target);
-    queue.forEach(e => {
-      const sc = targetScore(e);
-      if (sc < bestScore || (sc === bestScore && e.id < best.id)) { bestScore = sc; best = e; }
-    });
+    const s = computeStats(), trueSight = isEquipped('truesight');
+    let best = target;
+    queue.forEach(e => { if (isStrictlyBetterTarget(e, best, s, trueSight)) best = e; });
     if (best.id !== target.id) heroTargetId = best.id;
   }
 
@@ -1969,6 +2184,19 @@
       const originX = heroP.x + localX * Math.cos(facing) - localY * Math.sin(facing);
       const originY = heroP.y + localX * Math.sin(facing) + localY * Math.cos(facing);
       spawnBolt(originX, originY, tp.x, tp.y);
+    } else if (hero.equippedWeapon === 'wand') {
+      // Same origin math as the Crossbow's own bolt above, just its own shape/color — a small
+      // red orb rather than a streak, so the Wand's rapid-fire hits read as distinct little
+      // projectiles instead of arrows.
+      const heroP = heroPixelPos();
+      const tp = enemyPos(target);
+      const facing = Math.atan2(tp.y - heroP.y, tp.x - heroP.x);
+      const visuals = HERO_WEAPON_VISUALS.wand;
+      const localX = HERO_RADIUS * (visuals.weaponBaseReach ?? 0.5);
+      const localY = HERO_RADIUS * WEAPON_SIDE;
+      const originX = heroP.x + localX * Math.cos(facing) - localY * Math.sin(facing);
+      const originY = heroP.y + localX * Math.sin(facing) + localY * Math.cos(facing);
+      spawnWandOrb(originX, originY, tp.x, tp.y);
     }
 
     // Duelist's Blade only ever resets on a kill its OWN attack causes (this function) — never
@@ -2008,7 +2236,7 @@
         const firstHex = between[0];
         const firstEnemy = queue.find(e => e !== target && hexKey(e.hex.row, e.hex.idx) === hexKey(firstHex.row, firstHex.idx));
         if (firstEnemy) {
-          const pierceDmg = Math.max(1, Math.round(s.dmg));
+          const pierceDmg = Math.max(1, Math.round(s.dmg * shieldMultAgainst(firstEnemy.hex)));
           firstEnemy.hp -= pierceDmg;
           firstEnemy.flash = 1;
           const fp = enemyPos(firstEnemy);
@@ -2024,15 +2252,43 @@
     }
 
     const weaponDef = HERO_WEAPONS[hero.equippedWeapon];
-    let dmg = weaponDef.scalesOffMagic ? s.magic : s.dmg;
+    // Staff's ramp: consecutive hits on the SAME target climb its dmg multiplier from
+    // STAFF_MIN_DMG_MULT toward STAFF_MAX_DMG_MULT; switching targets (or a fresh target after
+    // a kill) resets it to 0, so sustained focus-fire is what's rewarded, not just holding the
+    // weapon. Read BEFORE incrementing below, so this swing's own damage/pierce-eligibility use
+    // the stack count built up by every PRIOR hit on this target, not one still in progress.
+    if (weaponDef.id === 'staff') {
+      if (hero.staffStackTargetId !== target.id) { hero.staffStacks = 0; hero.staffStackTargetId = target.id; }
+    }
+    const staffStacksNow = weaponDef.id === 'staff' ? hero.staffStacks : 0;
+    // Magical weapons (Wand, Staff) apply their own dmgMult HERE, on the weapon's own hit,
+    // rather than in computeStats — s.magic is the pure character stat and must stay that way
+    // (see computeStats' own comment) so other magic-scaling talismans never read a nerfed value
+    // just because a magic weapon happens to be equipped.
+    let dmg;
+    if (weaponDef.id === 'staff') {
+      const rampFrac = staffStacksNow / STAFF_MAX_STACKS;
+      dmg = s.magic * (STAFF_MIN_DMG_MULT + (STAFF_MAX_DMG_MULT - STAFF_MIN_DMG_MULT) * rampFrac);
+    } else if (weaponDef.magical) {
+      dmg = s.magic * (weaponDef.dmgMult || 1);
+    } else {
+      dmg = s.dmg;
+    }
     // Duelist's Blade: a flat +10 while "advancing" (moved at least 1 hex since the last
     // attack) — composes with crit/Overcharge/pierce like any other component of dmg, rather
     // than being tacked on separately afterward, so a crit on an advancing swing is +20, not +10.
     if (hero.equippedWeapon === 'duelistblade' && hero.advancingBonusActive) dmg += 10;
-    const isCrit = Math.random() < s.critChance;
+    // Magic weapons never crit — Killer Instinct/crit rolls are a physical-weapon-only mechanic.
+    const isCrit = !weaponDef.magical && Math.random() < s.critChance;
     if (isCrit) dmg *= s.critDamage;
     if (isEquipped('overcharge') && hero.attackCount % 5 === 0) dmg *= 2.5;
     dmg *= targetDmgMult;
+    // Kept PRE-shield for Boomerang's bounces below, which each need their OWN per-hex shield
+    // check (a bounce can land on a shielded hex even when the primary target's hex wasn't, or
+    // vice versa) rather than inheriting whatever the primary target's shield status happened
+    // to be.
+    const preShieldDmg = dmg;
+    dmg *= shieldMultAgainst(target.hex); // Mage's Apprentice — half damage if target's shielded and the hero isn't
     dmg = Math.max(1, Math.round(dmg));
 
     target.hp -= dmg;
@@ -2044,6 +2300,45 @@
     logDamageDealt('Auto Attack', dmg);
     applyLifesteal(dmg);
     applyAffixReactions(target, dmg);
+    if (weaponDef.id === 'staff') hero.staffStacks = Math.min(STAFF_MAX_STACKS, hero.staffStacks + 1);
+
+    // Staff, once fully ramped: the beam pierces through the target instead of stopping there,
+    // hitting every further enemy roughly along the same ray from the hero (a narrow real-angle
+    // cone, not a formal "hex direction" — see STAFF_PIERCE_ANGLE_TOLERANCE's own comment for why
+    // this grid has no clean version of that), each taking STAFF_PIERCE_FALLOFF less than the
+    // last, chained by line of sight exactly like any other shot (Ice Wall/Ruins stop it).
+    if (weaponDef.id === 'staff' && staffStacksNow >= STAFF_MAX_STACKS) {
+      const heroP = heroPixelPos();
+      const targetP = enemyPos(target);
+      const beamAngle = Math.atan2(targetP.y - heroP.y, targetP.x - heroP.x);
+      const targetDist = Math.hypot(targetP.x - heroP.x, targetP.y - heroP.y);
+      const angleDiff = (a, b) => { const d = Math.abs(a - b) % (Math.PI * 2); return d > Math.PI ? Math.PI * 2 - d : d; };
+      const candidates = queue.filter(e => e !== target).map(e => {
+        const ep = enemyPos(e);
+        return { e, dist: Math.hypot(ep.x - heroP.x, ep.y - heroP.y), diff: angleDiff(Math.atan2(ep.y - heroP.y, ep.x - heroP.x), beamAngle) };
+      }).filter(c => c.dist > targetDist && c.diff < STAFF_PIERCE_ANGLE_TOLERANCE)
+        .sort((a, b) => a.dist - b.dist);
+      let pierceDmg = preShieldDmg;
+      let pierceFrom = target;
+      let pierced = 0;
+      for (const { e: nextEnemy } of candidates) {
+        if (!hasLineOfSight(pierceFrom.hex, nextEnemy.hex, isEquipped('truesight'))) break;
+        pierceDmg *= STAFF_PIERCE_FALLOFF;
+        const hitDmg = Math.max(1, Math.round(pierceDmg * shieldMultAgainst(nextEnemy.hex)));
+        nextEnemy.hp -= hitDmg;
+        nextEnemy.flash = 1;
+        const np = enemyPos(nextEnemy);
+        spawnSlash(np.x, np.y);
+        spawnDamageNumber(np.x, np.y - np.r - 10, String(hitDmg), '#b47cff');
+        logDamageDealt('Staff Pierce', hitDmg);
+        applyLifesteal(hitDmg);
+        applyAffixReactions(nextEnemy, hitDmg);
+        if (nextEnemy.hp <= 0) killEnemyFromHeroAttack(nextEnemy);
+        pierceFrom = nextEnemy;
+        pierced++;
+      }
+      if (pierced) log(`The beam pierces through ${pierced} more enem${pierced > 1 ? 'ies' : 'y'}!`, 'crit');
+    }
 
     // Whip — every hit slows its target by 75% (see resolveEnemyMovement's slowMult read),
     // refreshed on every hit rather than stacking, same as Bear Trap/Shockwave's stunTimer.
@@ -2068,19 +2363,24 @@
         candidates.sort((a, b) => hexDistance(a.hex, bounceSource.hex) - hexDistance(b.hex, bounceSource.hex) || a.id - b.id);
         const next = candidates[0];
         hit.push(next);
-        next.hp -= dmg;
+        const bounceDmg = Math.max(1, Math.round(preShieldDmg * shieldMultAgainst(next.hex)));
+        next.hp -= bounceDmg;
         next.flash = 1;
         const np = enemyPos(next);
-        const bp = enemyPos(bounceSource);
-        spawnBolt(bp.x, bp.y, np.x, np.y);
-        spawnDamageNumber(np.x, np.y - np.r - 10, String(dmg), '#d4a24c');
-        logDamageDealt('Boomerang Bounce', dmg);
-        applyLifesteal(dmg);
-        applyAffixReactions(next, dmg);
+        spawnSlash(np.x, np.y);
+        spawnDamageNumber(np.x, np.y - np.r - 10, String(bounceDmg), '#d4a24c');
+        logDamageDealt('Boomerang Bounce', bounceDmg);
+        applyLifesteal(bounceDmg);
+        applyAffixReactions(next, bounceDmg);
         if (next.hp <= 0) killEnemyFromHeroAttack(next);
         bounceSource = next;
       }
       if (hit.length > 1) log(`The boomerang bounces to ${hit.length - 1} more enem${hit.length - 1 > 1 ? 'ies' : 'y'}!`, 'crit');
+      // One continuous spinning throw through every hex it actually hit (hero -> target ->
+      // each bounce, in order), then flies back to the hero's hand — a real boomerang return,
+      // purely visual (no second round of damage on the way back).
+      const throwStart = heroPixelPos();
+      spawnBoomerangThrow([throwStart, ...hit.map(enemyPos), throwStart]);
     }
 
     // Electric Shock — every 4th attack, the hit arcs from the struck target to every enemy
@@ -2088,7 +2388,7 @@
     // just being a flat damage multiplier like Overcharge. Uses target.hex, which is still
     // valid here even if the main hit just killed it — killEnemy hasn't run yet.
     if (isEquipped('electricshock') && hero.attackCount % 4 === 0) {
-      const shockDmg = Math.max(1, Math.round(s.dmg * 0.5));
+      const baseShockDmg = Math.max(1, Math.round(s.dmg * 0.5));
       // The main target always takes the shock bonus too, not just its neighbors — previously a
       // solo target (nothing adjacent to chain into) meant this talisman silently did nothing at
       // all on its trigger tick, which read as broken/inconsistent for something that's supposed
@@ -2096,24 +2396,28 @@
       // always a visible jolt even with zero chain targets.
       const heroP = heroPixelPos();
       spawnShock(heroP.x, heroP.y, p.x, p.y);
-      target.hp -= shockDmg;
-      spawnDamageNumber(p.x, p.y - p.r - 30, String(shockDmg), '#7ec8ff');
-      logDamageDealt('Electric Shock', shockDmg);
-      applyLifesteal(shockDmg);
-      applyAffixReactions(target, shockDmg);
-      log(`Electric Shock jolts your target for ${shockDmg}!`, 'crit');
+      // Each hit (main + every chain target) needs its OWN shield check — a chain target's hex
+      // can be shielded independently of the main target's, same reasoning as Boomerang's bounces.
+      const mainShockDmg = Math.max(1, Math.round(baseShockDmg * shieldMultAgainst(target.hex)));
+      target.hp -= mainShockDmg;
+      spawnDamageNumber(p.x, p.y - p.r - 30, String(mainShockDmg), '#7ec8ff');
+      logDamageDealt('Electric Shock', mainShockDmg);
+      applyLifesteal(mainShockDmg);
+      applyAffixReactions(target, mainShockDmg);
+      log(`Electric Shock jolts your target for ${mainShockDmg}!`, 'crit');
 
       const chainTargets = queue.filter(e => e !== target && hexDistance(e.hex, target.hex) <= 1);
       if (chainTargets.length) log(`Electric Shock also arcs to ${chainTargets.length} more enem${chainTargets.length > 1 ? 'ies' : 'y'}!`, 'crit');
       chainTargets.forEach(e => {
-        e.hp -= shockDmg;
+        const chainDmg = Math.max(1, Math.round(baseShockDmg * shieldMultAgainst(e.hex)));
+        e.hp -= chainDmg;
         e.flash = 1;
         const ep = enemyPos(e);
         spawnShock(p.x, p.y, ep.x, ep.y);
-        spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(shockDmg), '#7ec8ff');
-        logDamageDealt('Electric Shock', shockDmg);
-        applyLifesteal(shockDmg);
-        applyAffixReactions(e, shockDmg);
+        spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(chainDmg), '#7ec8ff');
+        logDamageDealt('Electric Shock', chainDmg);
+        applyLifesteal(chainDmg);
+        applyAffixReactions(e, chainDmg);
       });
       chainTargets.filter(e => e.hp <= 0).forEach(killEnemyFromHeroAttack);
     }
@@ -2141,13 +2445,17 @@
     const targets = queue.filter(e => hitKeys.has(hexKey(e.hex.row, e.hex.idx)));
     if (!targets.length) return;
     const s = computeStats();
-    const dmg = Math.max(1, Math.round(s.dmg * ABILITY_CFG.cleave.dmgMult));
-    log(`Cleave strikes ${targets.length} enem${targets.length > 1 ? 'ies' : 'y'} for ${dmg} each!`, 'crit');
+    const baseDmg = Math.max(1, Math.round(s.dmg * ABILITY_CFG.cleave.dmgMult));
+    log(`Cleave strikes ${targets.length} enem${targets.length > 1 ? 'ies' : 'y'}!`, 'crit');
     heroLunge = 1;
     const flanking = hexes.slice(1);
     const arcHexes = flanking.length >= 2 ? [flanking[0], target.hex, flanking[1]] : [...flanking, target.hex];
     spawnCleaveSlice(arcHexes.map(h => hexPixelPos(h.row, h.idx)));
+    spawnCleaveGlow(hexes.map(h => hexPixelPos(h.row, h.idx))); // all 3 geometric hexes, regardless of whether each one actually has an enemy in it
     targets.forEach(enemy => {
+      // Each of the 3 hexes gets its own shield check — a flanking hex can be shielded
+      // independently of the target hex itself.
+      const dmg = Math.max(1, Math.round(baseDmg * shieldMultAgainst(enemy.hex)));
       enemy.hp -= dmg;
       enemy.flash = 1;
       const p = enemyPos(enemy);
@@ -2252,7 +2560,7 @@
     const target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
-    const dmg = Math.max(1, Math.round(s.magic));
+    const dmg = Math.max(1, Math.round(s.magic * shieldMultAgainst(target.hex)));
     const tp = enemyPos(target);
     const heroP = heroPixelPos();
     spawnFireballBolt(heroP.x, heroP.y, tp.x, tp.y);
@@ -2265,21 +2573,24 @@
     applyAffixReactions(target, dmg);
     log(`Fireball explodes for ${dmg}!`, 'crit');
 
-    const splashDmg = Math.max(1, Math.round(s.magic * 0.25));
+    const baseSplashDmg = Math.max(1, Math.round(s.magic * 0.25));
     const splashTargets = [];
     neighborsOf(target.hex.row, target.hex.idx).forEach(h => {
       const enemy = queue.find(e => e !== target && e.hex.row === h.row && e.hex.idx === h.idx);
       if (enemy) splashTargets.push(enemy);
       if (heroHex.row === h.row && heroHex.idx === h.idx) {
-        hero.hp -= splashDmg;
+        // The hero taking its own splash back is never shield-reduced — the shield protects
+        // enemies from the hero's damage, not the other way around.
+        hero.hp -= baseSplashDmg;
         heroFlash = 1;
         spawnSplash(heroP.x, heroP.y - 10);
-        spawnDamageNumber(heroP.x, heroP.y - 45, String(splashDmg), '#ff8c40');
-        logDamageTaken('Fireball (self)', splashDmg);
+        spawnDamageNumber(heroP.x, heroP.y - 45, String(baseSplashDmg), '#ff8c40');
+        logDamageTaken('Fireball (self)', baseSplashDmg);
         checkHeroDeath();
       }
     });
     splashTargets.forEach(enemy => {
+      const splashDmg = Math.max(1, Math.round(baseSplashDmg * shieldMultAgainst(enemy.hex)));
       enemy.hp -= splashDmg;
       enemy.flash = 1;
       const ep = enemyPos(enemy);
@@ -2330,7 +2641,7 @@
     const reachable = magicMissileReachableEnemies();
     if (!reachable.length) return;
     const s = computeStats();
-    const dmg = Math.max(1, Math.round(s.magic * 0.4));
+    const baseDmg = Math.max(1, Math.round(s.magic * 0.4));
     const current = currentHeroTarget();
     const targets = [];
     if (current && reachable.includes(current)) targets.push(current);
@@ -2342,6 +2653,7 @@
     targets.forEach(enemy => {
       const ep = enemyPos(enemy);
       spawnMagicMissileBolt(heroP.x, heroP.y, ep.x, ep.y);
+      const dmg = Math.max(1, Math.round(baseDmg * shieldMultAgainst(enemy.hex)));
       enemy.hp -= dmg;
       enemy.flash = 1;
       spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(dmg), '#b47cff');
@@ -2435,7 +2747,7 @@
   // matches beartrapHex; that same call site nulls beartrapHex right after, consuming it.
   function triggerBearTrap(enemy) {
     const s = computeStats();
-    const dmg = Math.max(1, Math.round(s.dmg * 3));
+    const dmg = Math.max(1, Math.round(s.dmg * 3 * shieldMultAgainst(enemy.hex)));
     enemy.hp -= dmg;
     enemy.flash = 1;
     enemy.stunTimer = Math.max(enemy.stunTimer || 0, 2);
@@ -2507,6 +2819,10 @@
       const originX = ep.x + localX * Math.cos(facing) - localY * Math.sin(facing);
       const originY = ep.y + localX * Math.sin(facing) + localY * Math.cos(facing);
       spawnBolt(originX, originY, targetPos.x, targetPos.y);
+    }
+    if (enemy.typeId === 'mage') {
+      const ep = enemyPos(enemy);
+      spawnMageZap(ep.x, ep.y, targetPos.x, targetPos.y);
     }
     if (Math.random() < s.dodgeChance) {
       log('You dodged the attack!', 'dodge');
@@ -2648,7 +2964,7 @@
       // Only accumulates while Momentum is actually owned (bag OR equipped — see
       // removeTalismanFromOwnership for the only thing that resets this), not unconditionally
       // every wave-clear regardless of whether you've ever picked it up.
-      if (hero.talismanBag.includes('momentum')) {
+      if (hero.talismanBag.includes('momentum') && (hero.talismanStacks.momentum || 0) < MOMENTUM_MAX_STACKS) {
         hero.talismanStacks.momentum = (hero.talismanStacks.momentum || 0) + 1;
       }
       hero.secondWindUsedThisWave = false;
@@ -2741,6 +3057,7 @@
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
     terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
+    ensureHeroSpawnIsValid(); // e.g. a Mage's Apprentice's shield landing right on the spawn hex
     phase = 'prepping';
     refreshShopForPrep();
     renderAll();
@@ -2760,6 +3077,7 @@
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
     terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
+    ensureHeroSpawnIsValid(); // e.g. a Mage's Apprentice's shield landing right on the spawn hex
     phase = 'prepping';
     refreshShopForPrep();
     renderAll();
@@ -2782,6 +3100,7 @@
     heroHex = { ...HERO_SPAWN_HEX };
     queue = buildQueueFromEncounter(chosenEncounter); // visible on the board during prep, before the fight starts
     terrainFeatures = generateTerrainForEncounter(); // same lifecycle as the queue — rolled fresh, visible in prep too
+    ensureHeroSpawnIsValid(); // e.g. a Mage's Apprentice's shield landing right on the spawn hex
     refreshShopForPrep();
     renderAll();
     maybeAutoStart();
@@ -2828,6 +3147,57 @@
     return { status: 'bagged' };
   }
 
+  // Shared by every source of a brand-new talisman — when the bag is full, instead of
+  // grantTalisman silently converting the new talisman to essence, this offers a real choice:
+  // discard one currently-owned talisman to make room, or convert the new one to essence anyway
+  // (the old default, now opt-in rather than automatic). Reuses the SAME #talismanModal/
+  // #talismanCards elements every other talisman pick already uses, repurposed in place rather
+  // than opening a second modal on top. `onGranted` receives the same result shape grantTalisman
+  // itself returns ({status: 'equipped'|'bagged'|'full', essence?}) once the player has actually
+  // made a choice, so every caller logs/reacts exactly like it already does for the non-full case.
+  function offerBagFullDiscard(t, onGranted) {
+    document.getElementById('talismanModalTitle').textContent = 'Your Bag Is Full';
+    document.getElementById('talismanModalSub').textContent =
+      `Discard one of your talismans to make room for ${t.icon} ${t.name}, or convert it to essence instead.`;
+    const cardsEl = document.getElementById('talismanCards');
+    cardsEl.innerHTML = '';
+    hero.talismanBag.forEach(id => {
+      const owned = TALISMANS.find(x => x.id === id);
+      const card = document.createElement('div');
+      card.className = 'talismanCard tier-' + owned.tier;
+      card.innerHTML = `<div class="icon">${owned.icon}</div><div class="name">${owned.name}</div><div class="desc">${owned.desc}</div>${talismanTagsLine(owned) ? `<div class="talismanTags">${talismanTagsLine(owned)}</div>` : ''}`;
+      card.addEventListener('click', () => {
+        removeTalismanFromOwnership(id);
+        const result = grantTalisman(t); // bag now has room — guaranteed not to hit the 'full' branch again
+        log(`Discarded ${owned.name} to make room for ${t.name}.`, 'wave');
+        document.getElementById('talismanModal').classList.add('hidden');
+        onGranted(result);
+      });
+      cardsEl.appendChild(card);
+    });
+    const essenceReward = duplicateEssenceReward(t.tier);
+    const skipBtn = document.createElement('button');
+    skipBtn.className = 'bagFullSkipBtn';
+    skipBtn.textContent = `Convert ${t.name} to +${essenceReward} essence instead`;
+    skipBtn.addEventListener('click', () => {
+      legacy.essence += essenceReward;
+      saveLegacy();
+      document.getElementById('talismanModal').classList.add('hidden');
+      onGranted({ status: 'full', essence: essenceReward });
+    });
+    cardsEl.appendChild(skipBtn);
+    document.getElementById('talismanModal').classList.remove('hidden');
+    renderAll();
+  }
+
+  // Every acquisition call site now goes through this instead of calling grantTalisman directly
+  // — same synchronous result for the common case (bag has room), but hands off to the discard
+  // choice above (and calls onGranted only once the player resolves it) when the bag is full.
+  function grantOrOfferTalisman(t, onGranted) {
+    if (bagIsFull()) { offerBagFullDiscard(t, onGranted); return; }
+    onGranted(grantTalisman(t));
+  }
+
   // Only one purchase per visit — buying immediately ends the room, same as picking a card
   // anywhere else in the game (talisman modal, path choice). "Leave" is only for walking away
   // with nothing.
@@ -2838,11 +3208,13 @@
     gold -= offer.price;
     offer.bought = true;
     const t = offer.talisman;
-    const result = grantTalisman(t);
-    const note = result.status === 'equipped' ? ' (auto-equipped)'
-      : result.status === 'full' ? ` (bag full — converted to +${result.essence} essence)` : '';
-    log(`Bought ${t.name} from the Spellweaver.${note}`, 'wave');
-    leaveRoom();
+    document.getElementById('roomModal').classList.add('hidden'); // in case the bag-full discard modal needs to take over
+    grantOrOfferTalisman(t, result => {
+      const note = result.status === 'equipped' ? ' (auto-equipped)'
+        : result.status === 'full' ? ` (bag full — converted to +${result.essence} essence)` : '';
+      log(`Bought ${t.name} from the Spellweaver.${note}`, 'wave');
+      leaveRoom();
+    });
   }
 
   function innHeal() {
@@ -2864,12 +3236,12 @@
   // 50/50 between a different random talisman (a dupe converts to essence, same as every
   // other talisman pickup) or a flat 25-100g — see the design discussion for why the "worth
   // 50-200% of what you gave" goal is being punted on a real value formula for now.
-  // The only place a talisman actually leaves your possession today (the Shrine's sacrifice),
-  // routed through one shared helper rather than inlining the bag/equipped removal here — any
-  // future disposal path (a vendor sell, a discard button, whatever) should call this too, so
-  // stack counters (see hero.talismanStacks / Momentum) always reset on the way out instead of
-  // needing that reset re-added by hand at every new call site. Sell it, rebuy it, stacks are
-  // gone — there's no way to bank Growth-type progress through a sale.
+  // Routed through one shared helper rather than inlining the bag/equipped removal at each call
+  // site — any path that removes a talisman from ownership (the Shrine's sacrifice, or now the
+  // bag-full discard choice — see offerBagFullDiscard) should call this too, so stack counters
+  // (see hero.talismanStacks / Momentum) always reset on the way out instead of needing that
+  // reset re-added by hand at every new call site. Sell it, rebuy it, stacks are gone — there's
+  // no way to bank Growth-type progress through a sale.
   function removeTalismanFromOwnership(id) {
     hero.talismanBag = hero.talismanBag.filter(x => x !== id);
     hero.equipped.major = hero.equipped.major.filter(x => x !== id);
@@ -2883,7 +3255,15 @@
     if (!t || !hero.talismanBag.includes(id)) return;
     removeTalismanFromOwnership(id);
 
-    let giftText;
+    // Deferred so the bag-full branch below can finish asynchronously (after the player resolves
+    // the discard-choice modal) while the two synchronous branches just call it immediately.
+    const finish = giftText => {
+      log(`Sacrificed ${t.name} at the shrine. ${giftText}`, 'wave');
+      roomState = { step: 'result', giftText };
+      document.getElementById('roomModal').classList.remove('hidden');
+      renderAll();
+    };
+
     if (Math.random() < 0.5) {
       const pool = TALISMANS.filter(x => x.id !== id);
       const gift = pool[Math.floor(Math.random() * pool.length)];
@@ -2891,21 +3271,20 @@
         const reward = duplicateEssenceReward(gift.tier);
         legacy.essence += reward;
         saveLegacy();
-        giftText = `Already own ${gift.name} — converted to +${reward} essence.`;
+        finish(`Already own ${gift.name} — converted to +${reward} essence.`);
       } else {
-        const result = grantTalisman(gift);
-        giftText = result.status === 'full'
-          ? `The shrine offers ${gift.name}, but your bag is full — converted to +${result.essence} essence instead.`
-          : `The shrine grants you ${gift.icon} ${gift.name}${result.status === 'equipped' ? ' (auto-equipped)' : ''}.`;
+        document.getElementById('roomModal').classList.add('hidden'); // in case the bag-full discard modal needs to take over
+        grantOrOfferTalisman(gift, result => {
+          finish(result.status === 'full'
+            ? `The shrine offers ${gift.name}, but your bag is full — converted to +${result.essence} essence instead.`
+            : `The shrine grants you ${gift.icon} ${gift.name}${result.status === 'equipped' ? ' (auto-equipped)' : ''}.`);
+        });
       }
     } else {
       const amt = 25 + Math.floor(Math.random() * 76); // 25-100 inclusive
       gold += amt;
-      giftText = `The shrine grants you +${amt}g.`;
+      finish(`The shrine grants you +${amt}g.`);
     }
-    log(`Sacrificed ${t.name} at the shrine. ${giftText}`, 'wave');
-    roomState = { step: 'result', giftText };
-    renderAll();
   }
 
   // ---------------- Talisman offering ----------------
@@ -2961,25 +3340,31 @@
           legacy.essence += reward;
           log(`Already own ${t.name} — converted to +${reward} essence.`, 'wave');
           saveLegacy();
+          document.getElementById('talismanModal').classList.add('hidden');
+          renderAll();
+          onDone();
         } else {
-          // grantTalisman is the shared acquisition path (also used by the Spellweaver and the
-          // Shrine) — it auto-equips into an open slot as a convenience default, or converts to
-          // essence instead if the bag is already full (see bagCapacity).
-          const result = grantTalisman(t);
-          if (result.status === 'full') {
-            log(`Bag full — ${t.name} converted to +${result.essence} essence instead.`, 'wave');
-          } else {
-            log(`Talisman acquired: ${t.name}.`, 'wave');
-            log(result.status === 'equipped' ? `Auto-equipped ${t.name}.` : `${t.name} added to your bag — equip it from the Loadout tab.`, 'wave');
-            if (t.unlocksStat) {
-              const tags = Array.isArray(t.unlocksStat) ? t.unlocksStat : [t.unlocksStat];
-              log(`Unlocked: ${tags.map(s => STAT_LABELS[s] || s).join(' & ')}!`, 'wave');
+          // grantOrOfferTalisman is the shared acquisition path (also used by the Spellweaver
+          // and the Shrine) — it auto-equips into an open slot as a convenience default, or (if
+          // the bag is already full) hands off to offerBagFullDiscard's own choice instead of
+          // deciding unilaterally. Repurposes this SAME open modal in place when that happens,
+          // so no separate hide/show is needed here for that case.
+          grantOrOfferTalisman(t, result => {
+            if (result.status === 'full') {
+              log(`Bag full — ${t.name} converted to +${result.essence} essence instead.`, 'wave');
+            } else {
+              log(`Talisman acquired: ${t.name}.`, 'wave');
+              log(result.status === 'equipped' ? `Auto-equipped ${t.name}.` : `${t.name} added to your bag — equip it from the Loadout tab.`, 'wave');
+              if (t.unlocksStat) {
+                const tags = Array.isArray(t.unlocksStat) ? t.unlocksStat : [t.unlocksStat];
+                log(`Unlocked: ${tags.map(s => STAT_LABELS[s] || s).join(' & ')}!`, 'wave');
+              }
             }
-          }
+            document.getElementById('talismanModal').classList.add('hidden');
+            renderAll();
+            onDone();
+          });
         }
-        document.getElementById('talismanModal').classList.add('hidden');
-        renderAll();
-        onDone();
       });
       cardsEl.appendChild(card);
     });
@@ -3004,6 +3389,7 @@
     hero.poisonStacks = 0;
     hero.plaguedDmgRef = 0;
     hero.decoy = null;
+    hero.staffStacks = 0; hero.staffStackTargetId = null; // Staff's ramp starts cold each fight too
     hero.advancingBonusActive = false; // Duelist's Blade starts inactive each fight — has to earn it by moving first
     hero.cooldowns = {}; // abilities start fresh each fight, never carrying a head start (or a
                           // deficit) over from the last one
@@ -3636,7 +4022,9 @@
       const tierClass = opt.type === 'noncombat' ? 'tier-noncombat' : `tier-${opt.tierKey}`;
       card.className = `talismanCard tierCard ${tierClass}`;
       const rewardLine = opt.type === 'noncombat' ? '' : `<div class="rewardLine">Reward: ${opt.rewardLabel}</div>`;
+      const portrait = opt.type === 'noncombat' ? roomPortraitHTML(opt) : '';
       card.innerHTML = `
+        ${portrait}
         <div class="name">${opt.tierLabel}</div>
         <div class="desc">${opt.desc}</div>
         ${affixBadgesHtml(opt.affixes)}
@@ -3644,6 +4032,17 @@
       card.addEventListener('click', () => choosePath(idx));
       el.appendChild(card);
     });
+  }
+
+  // A non-combat room's picture — its `image` (a data: URI or URL, once Nate provides real art)
+  // if set, otherwise its `icon` shown large in an identically-sized frame, so the layout never
+  // changes shape when art gets swapped in later. `extraClass` adds the `.large` modifier for
+  // the room modal's bigger header version.
+  function roomPortraitHTML(room, extraClass) {
+    const cls = 'roomPortrait' + (extraClass ? ' ' + extraClass : '');
+    return room.image
+      ? `<div class="${cls}"><img src="${room.image}" alt="${room.tierLabel}"></div>`
+      : `<div class="${cls}">${room.icon}</div>`;
   }
 
   // Small tooltipped pills so an affix is genuinely informed information before you pick a
@@ -3661,6 +4060,7 @@
     if (phase !== 'roomVisit') { modal.classList.add('hidden'); return; }
     modal.classList.remove('hidden');
     modal.querySelector('.modalBox').classList.toggle('wide', chosenEncounter.roomKey === 'shrine');
+    document.getElementById('roomModalPortrait').innerHTML = roomPortraitHTML(chosenEncounter, 'large');
     document.getElementById('roomModalTitle').textContent = chosenEncounter.tierLabel;
     document.getElementById('roomModalSub').textContent = chosenEncounter.desc;
     const body = document.getElementById('roomModalBody');
@@ -3883,6 +4283,40 @@
     }
   }
 
+  // Boomerang held in-hand — a plain V silhouette (two arms from a shared vertex at an obtuse
+  // angle), distinct from every cross-shaped weapon. Static while held, using whatever
+  // strokeStyle/lineWidth drawFacingUnit already set (same convention as drawCrossWeapon) — the
+  // spin is reserved for the actual throw (see drawBoomerangIcon/'boomerangThrow'), so holding
+  // still vs. mid-throw stay visually distinct states.
+  function drawBoomerangWeapon(r, wx, wy, o) {
+    const arm = r * (o.weaponBlade ?? 0.5);
+    const halfAngle = 1.15; // ~66° each side, so the angle BETWEEN the two arms is ~132° (obtuse)
+    ctx.beginPath();
+    ctx.moveTo(wx + arm * Math.cos(halfAngle), wy + arm * Math.sin(halfAngle));
+    ctx.lineTo(wx, wy);
+    ctx.lineTo(wx + arm * Math.cos(-halfAngle), wy + arm * Math.sin(-halfAngle));
+    ctx.stroke();
+  }
+
+  // The same V silhouette as drawBoomerangWeapon above, but self-contained (own color/rotation)
+  // for the thrown effect, which draws in absolute canvas space with no ambient facing transform
+  // to inherit — see the 'boomerangThrow' effect dispatch.
+  function drawBoomerangIcon(cx, cy, angle, size, color) {
+    const halfAngle = 1.15;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(size * Math.cos(halfAngle), size * Math.sin(halfAngle));
+    ctx.lineTo(0, 0);
+    ctx.lineTo(size * Math.cos(-halfAngle), size * Math.sin(-halfAngle));
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // Wretch's claw — a bear-swipe. The claw fan travels along an arc across the front of the
   // body (not just rotating in place — a fixed point spinning in place reads as spinning, not
   // attacking), cocked in tight on its right through the slow windup, then raked across to the
@@ -4021,6 +4455,7 @@
     if (shape === 'claw') drawClawWeapon(r, p, o);
     else if (shape === 'club') drawClubWeapon(r, wx, wy, o);
     else if (shape === 'crossbow') drawCrossbowWeapon(r, restX, wx, wy, o);
+    else if (shape === 'boomerang') drawBoomerangWeapon(r, wx, wy, o);
     else drawCrossWeapon(r, wx, wy, o);
 
     if (o.shield) drawShield(r, o);
@@ -4111,6 +4546,77 @@
         ctx.fill();
       });
     });
+    ctx.restore();
+  }
+
+  // Mage's Apprentice's shield — visible from the setup/prep phase onward (per Nate's spec) and
+  // for the whole fight after, exactly like Ice Wall above; unlike Ice Wall it's never placed by
+  // the player, so there's no pending/committed distinction to draw, just "on wherever a live
+  // Apprentice's shieldedHexKeys says it is" every frame.
+  function drawApprenticeShields() {
+    const keys = shieldedHexKeys();
+    if (!keys.size) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(190,150,220,0.16)';
+    ctx.strokeStyle = 'rgba(220,190,240,0.55)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 5]);
+    keys.forEach(k => {
+      const [row, idx] = k.split(',').map(Number);
+      const p = hexPixelPos(row, idx);
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 180) * 60 * i;
+        const x = p.x + HEX_RADIUS * Math.cos(angle), y = p.y + HEX_RADIUS * Math.sin(angle);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  // The Staff's beam — Nate's explicit ask: "constant," not a per-hit flash like every other
+  // weapon's projectile. Redrawn fresh every render frame straight from live game state (same
+  // pattern as drawSmokeZones/drawApprenticeShields) for as long as the hero is actively in
+  // range+LOS of its target with the Staff equipped, rather than living in the decaying
+  // `effects` array — that's what makes it read as continuous instead of flickering between
+  // hits. The zigzag re-rolls its jitter every single frame (unlike Electric Shock/the Mage's
+  // zap, which roll once at spawn and hold a stable shape) specifically so it flickers like real
+  // lightning rather than a static jagged line.
+  function drawStaffBeam(heroP, s) {
+    if (phase !== 'combat' || hero.equippedWeapon !== 'staff' || !queue.length) return;
+    const target = currentHeroTarget();
+    if (!target) return;
+    const trueSight = isEquipped('truesight');
+    if (hexDistance(heroHex, target.hex) > effectiveAtkRange(heroHex, s.atkRange, trueSight, target.hex)) return;
+    if (!hasLineOfSight(heroHex, target.hex, trueSight)) return;
+    const tp = enemyPos(target);
+    const segments = 5;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(heroP.x, heroP.y);
+    for (let i = 1; i < segments; i++) {
+      const t = i / segments;
+      const jitter = 7;
+      ctx.lineTo(
+        heroP.x + (tp.x - heroP.x) * t + (Math.random() - 0.5) * jitter,
+        heroP.y + (tp.y - heroP.y) * t + (Math.random() - 0.5) * jitter
+      );
+    }
+    ctx.lineTo(tp.x, tp.y);
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = '#b47cff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // A thinner, brighter core pass over the SAME jagged path (stroke() doesn't clear the
+    // current path) so it reads as a glowing energy beam rather than a flat purple line.
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = '#e8d4ff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -4388,6 +4894,7 @@
     drawHexGrid();
     drawTerrainFeatures();
     drawSmokeZones();
+    drawApprenticeShields();
     drawSetupAbilities();
     if (phase === 'combat') { drawTargetHighlight(); drawSideHUD(); }
 
@@ -4414,7 +4921,11 @@
     const heroInterval = 1 / s.atkSpeed;
     const heroAtkProgress = Math.min(1, (hero.atkTimer + simExtrapolation) / heroInterval);
     drawFacingUnit(heroP.x + heroShake + heroLungeOff.x, heroP.y + heroLungeOff.y, HERO_RADIUS, heroAngle, hero.hp > 0 ? '#4d8fdb' : '#555', false, heroAtkProgress, HERO_WEAPON_VISUALS[hero.equippedWeapon]);
-    drawHealthBar(heroP.x, heroP.y - 55, 80, hero.hp / s.maxHP, '#5ac36a');
+    // Clamped to a minimum on-canvas y so a unit standing in the topmost hex row never has its
+    // bar partially cut off by the canvas's own edge — closer to the head (radius+16 instead of
+    // a much more generous flat 55px) fixes it for almost every position; the clamp is the real
+    // guarantee for the handful of hexes still too close to the top even after that.
+    drawHealthBar(heroP.x, Math.max(6, heroP.y - HERO_RADIUS - 16), 80, hero.hp / s.maxHP, '#5ac36a');
 
     // After Image's decoy — a translucent copy of the hero standing at the hex it swapped out
     // of, with its own (much smaller) health bar. Enemies target it instead of the real hero
@@ -4425,7 +4936,7 @@
       ctx.globalAlpha = 0.45;
       drawFacingUnit(dp.x, dp.y, HERO_RADIUS, 0, '#4d8fdb', false, 0, HERO_WEAPON_VISUALS[hero.equippedWeapon]);
       ctx.restore();
-      drawHealthBar(dp.x, dp.y - 55, 60, hero.decoy.hp / hero.decoy.maxHp, '#8fa8c9');
+      drawHealthBar(dp.x, Math.max(6, dp.y - HERO_RADIUS - 16), 60, hero.decoy.hp / hero.decoy.maxHp, '#8fa8c9');
     }
 
     // Enemies — each sits on its own hex; color reflects role (melee/reach/ranged) so it's
@@ -4444,7 +4955,7 @@
         const atkProgress = Math.min(1, (enemy.atkTimer + simExtrapolation) / enemy.atkInterval);
         const visuals = (enemy.typeId && ENEMY_VISUALS[enemy.typeId]) || {};
         drawFacingUnit(p.x + shake + lungeOff.x, p.y + lungeOff.y, p.r, angle, color, notable, atkProgress, { ...visuals, hitProgress: enemy.flash });
-        drawHealthBar(p.x, p.y - p.r - 16, p.r * 2.2, enemy.hp / enemy.maxHp, '#e05a5a');
+        drawHealthBar(p.x, Math.max(6, p.y - p.r - 10), p.r * 2.2, enemy.hp / enemy.maxHp, '#e05a5a');
         if (enemy.stunTimer > 0) {
           ctx.save();
           ctx.fillStyle = '#ffd479';
@@ -4466,6 +4977,8 @@
       ctx.fillText(idleText, W * 0.65, H * 0.52);
       ctx.textAlign = 'left';
     }
+
+    drawStaffBeam(heroP, s);
 
     // hit-feedback effects (slash / splash / cleave slice) — purely cosmetic
     effects.forEach(e => {
@@ -4511,6 +5024,22 @@
         }
         ctx.stroke();
         ctx.restore();
+      } else if (e.type === 'cleaveGlow') {
+        // A filled red hex outline over each of the 3 struck hexes, fading out — separate from
+        // the arc slice above so the actual AoE SHAPE reads clearly even for someone not
+        // tracking the arc animation, per Nate's ask.
+        ctx.save();
+        ctx.globalAlpha = a * 0.5;
+        ctx.fillStyle = '#c23b3b';
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 180) * 60 * i;
+          const x = e.x + HEX_RADIUS * Math.cos(angle), y = e.y + HEX_RADIUS * Math.sin(angle);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       } else if (e.type === 'bolt') {
         // A short streak sliding along the fixed fire-to-target line, from (1-life) to a bit
         // further — a trailing bolt rather than a single travelling dot.
@@ -4530,6 +5059,19 @@
         ctx.globalAlpha = a;
         ctx.strokeStyle = '#7ec8ff';
         ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(e.x1, e.y1);
+        ctx.lineTo(e.midX, e.midY);
+        ctx.lineTo(e.x2, e.y2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === 'mageZap') {
+        // Same jagged-zigzag shape as Electric Shock's 'shock' effect, tinted green so the
+        // Mage's own spell reads as visually distinct from that talisman.
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = '#4be86a';
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.moveTo(e.x1, e.y1);
         ctx.lineTo(e.midX, e.midY);
@@ -4569,12 +5111,13 @@
         ctx.stroke();
         ctx.restore();
       } else if (e.type === 'magicMissileBolt') {
-        // Same trailing-streak shape as 'bolt'/'fireballBolt', tinted violet for arcane.
+        // Same trailing-streak shape as 'bolt'/'fireballBolt', tinted yellow — deliberately NOT
+        // violet, so it reads as a distinct spell from the Staff's own purple beam.
         const t = 1 - a;
         const tTail = Math.max(0, t - 0.18);
         ctx.save();
         ctx.globalAlpha = Math.min(1, a * 2);
-        ctx.strokeStyle = '#b47cff';
+        ctx.strokeStyle = '#f5e050';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(e.x1 + (e.x2 - e.x1) * tTail, e.y1 + (e.y2 - e.y1) * tTail);
@@ -4619,6 +5162,43 @@
         ctx.beginPath();
         ctx.arc(e.x, e.y, e.r * t, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+      } else if (e.type === 'wandOrb') {
+        // A small solid orb traveling the fixed fire-to-target line (same (1-life) interpolation
+        // as 'bolt'), not a streak — reads as a little projectile rather than an arrow/beam.
+        const t = 1 - a;
+        const ox = e.x1 + (e.x2 - e.x1) * t;
+        const oy = e.y1 + (e.y2 - e.y1) * t;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, a * 2);
+        ctx.fillStyle = '#ff4d4d';
+        ctx.beginPath();
+        ctx.arc(ox, oy, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (e.type === 'boomerangThrow') {
+        // One continuous flight through every waypoint it actually hit (hero -> each hit target,
+        // in order -> back to the hero), rather than separate per-hop bolts — so the throw reads
+        // as a single spinning object visiting each enemy in turn instead of several unrelated
+        // flashes. Position is found by walking the precomputed per-segment lengths (see
+        // spawnBoomerangThrow) until the cumulative distance matches this frame's progress along
+        // the WHOLE path; spin is just cosmetic rotation, independent of travel direction.
+        const t = 1 - a;
+        const targetDist = t * e.total;
+        let acc = 0, segIdx = 0;
+        while (segIdx < e.segLens.length - 1 && acc + e.segLens[segIdx] < targetDist) {
+          acc += e.segLens[segIdx];
+          segIdx++;
+        }
+        const segLen = e.segLens[segIdx] || 1;
+        const segT = Math.min(1, Math.max(0, (targetDist - acc) / segLen));
+        const p1 = e.points[segIdx], p2 = e.points[segIdx + 1];
+        const x = p1.x + (p2.x - p1.x) * segT;
+        const y = p1.y + (p2.y - p1.y) * segT;
+        const spin = t * Math.PI * 2 * 5; // several full spins over the whole flight
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, a * 2.5);
+        drawBoomerangIcon(x, y, spin, 11, '#d4a24c');
         ctx.restore();
       }
       ctx.globalAlpha = 1;
@@ -4670,9 +5250,22 @@
     // just froze in place forever (Nate's reported bug: two melee enemies, a 1-hex gap, the back
     // one never advances). Only improves on the unit's CURRENT distance, so a unit already at
     // the best reachable spot correctly does nothing instead of shuffling pointlessly.
-    let bestKey = null, bestDist = hexDistance(fromHex, toHex);
+    //
+    // Ranked by TRUE hop count from fromHex first (bestHops), with raw hexDistance-to-target
+    // (bestFallbackDist) only breaking ties among candidates that take the SAME number of real
+    // steps — not by raw hexDistance alone. Nate's report: with a wall/chasm in the way, a hex on
+    // the far side can have a smaller raw hexDistance-to-toHex than a hex right next door, purely
+    // because straight-line hex distance has no idea a wall interrupts it — the old fallback would
+    // send a unit walking all the way around for a "closer-looking" hex, instead of the sensible
+    // "just wait behind whatever's blocking you." Hop count is the BFS's own real walking
+    // distance, so a wall detour can never masquerade as the better option; this never regresses
+    // the original chokepoint fix above, since that scenario is always resolved at hop 1.
+    const startDist = hexDistance(fromHex, toHex);
+    let bestKey = null, bestHops = Infinity, bestFallbackDist = Infinity;
+    let hopCount = 0;
 
     while (frontier.length && !goalKey) {
+      hopCount++;
       const next = [];
       for (const hex of frontier) {
         const hexK = hexKey(hex.row, hex.idx);
@@ -4683,7 +5276,9 @@
           cameFrom.set(k, hexK);
           if (hexDistance(n, toHex) <= range && (!extraGoalCheck || extraGoalCheck(n))) { goalKey = k; break; }
           const d = hexDistance(n, toHex);
-          if (d < bestDist) { bestDist = d; bestKey = k; }
+          if (d < startDist && hopCount <= bestHops && (hopCount < bestHops || d < bestFallbackDist)) {
+            bestHops = hopCount; bestFallbackDist = d; bestKey = k;
+          }
           next.push(n);
         }
         if (goalKey) break;
@@ -4761,10 +5356,31 @@
   // lifts the cap specifically when whatever's imposing it doesn't ALSO blockMovement — today
   // that's only ever Fog Patch, which is walkable, so True Sight negates its own-hex range cap
   // exactly like it negates fog sitting between the hero and a target.
-  function effectiveAtkRange(fromHex, baseRange, ignorePassableBlockers) {
-    const t = terrainAt(fromHex);
-    if (ignorePassableBlockers && !t.blocksMovement) return baseRange;
-    return Math.min(baseRange, t.rangeCap);
+  // `toHex` (optional — every real call site has one) caps the SAME way for fog sitting on the
+  // TARGET's own hex, not just the attacker's — Nate's report: the Spear's 2-hex reach pierce
+  // could still hit something hiding in fog from 2 hexes out, i.e. "seeing" it well enough to
+  // reach-attack it without actually being close enough to. This was never a Spear-specific bug
+  // to patch — Spear has no bespoke range check at all, it only fires once the shared attack-
+  // eligibility gate already says the target's in range, so fixing the cap here symmetrically
+  // (fog on EITHER end reduces the effective range to 1) fixes every ranged/reach weapon and
+  // enemy at once, including Spear's own pierce, with zero weapon-specific code.
+  // Enemy-side counterpart to the hero weapons' own rangeOverride (Whip) — the Mage's infinite
+  // range doesn't fit the plain ROLE_RANGE[role] lookup every other enemy uses, so every call
+  // site that used to read that directly for an ENEMY (not the hero) goes through this instead.
+  // Falls back safely to ROLE_RANGE[e.role] for the boss (no typeId/ENEMY_TYPES entry at all)
+  // and every other type that doesn't set one.
+  function enemyBaseRange(e) {
+    const t = e.typeId && ENEMY_TYPES[e.typeId];
+    return (t && t.rangeOverride) || ROLE_RANGE[e.role];
+  }
+
+  function effectiveAtkRange(fromHex, baseRange, ignorePassableBlockers, toHex) {
+    const capAt = hex => {
+      const t = terrainAt(hex);
+      return (ignorePassableBlockers && !t.blocksMovement) ? Infinity : t.rangeCap;
+    };
+    const cap = toHex ? Math.min(capAt(fromHex), capAt(toHex)) : capAt(fromHex);
+    return Math.min(baseRange, cap);
   }
 
   // Every hex that currently blocks movement — used to seed the `occupied` set in both movement
@@ -4773,6 +5389,35 @@
   // type adds its hex list here, not to resolveEnemyMovement/resolveHeroMovement directly.
   function terrainBlockingHexes() {
     return [...iceWallHexes, ...terrainFeatures.filter(f => TERRAIN_TYPES[f.type].blocksMovement).map(f => f.hex)];
+  }
+
+  // Every hex covered by a currently-active Mage's Apprentice shield — dynamically follows
+  // whichever unit each live Apprentice is protecting (via .protectsId, set once at spawn — see
+  // buildQueueFromEncounter), so a shield naturally stops applying the instant its Apprentice
+  // dies, with no separate cleanup needed, and moves with the protected unit if it repositions.
+  function shieldedHexKeys() {
+    const keys = new Set();
+    queue.forEach(a => {
+      if (a.typeId !== 'apprentice' || a.protectsId == null) return;
+      const protectedUnit = queue.find(e => e.id === a.protectsId);
+      if (!protectedUnit) return;
+      allHexes().forEach(h => { if (hexDistance(h, protectedUnit.hex) <= APPRENTICE_SHIELD_RADIUS) keys.add(hexKey(h.row, h.idx)); });
+    });
+    return keys;
+  }
+
+  // Half damage for any hit landing on a shielded hex, UNLESS the attack's own origin is also
+  // inside that same shield — Nate's spec: "any attack that comes from a hex outside of the
+  // shield." Every hero-sourced hit in this file (including ones that visually bounce/chain
+  // between enemies, like Boomerang or Electric Shock) really originates from heroHex, since the
+  // hero itself never leaves its own hex to make those happen — so this only ever needs the
+  // target hex as a parameter, never a separate "from" hex per call site.
+  function shieldMultAgainst(targetHex) {
+    const keys = shieldedHexKeys();
+    if (!keys.size) return 1;
+    const targetShielded = keys.has(hexKey(targetHex.row, targetHex.idx));
+    const heroShielded = keys.has(hexKey(heroHex.row, heroHex.idx));
+    return (targetShielded && !heroShielded) ? APPRENTICE_SHIELD_DAMAGE_MULT : 1;
   }
 
   // Every Debris hex — Debris is walkable, so this isn't for the base occupied set, only for the
@@ -4966,7 +5611,7 @@
     // a wall to occupy — see hexesBetween's d<=1 short-circuit).
     movable
       .map(e => ({ e, dist: hexDistance(e.hex, target) }))
-      .filter(({ e, dist }) => dist > effectiveAtkRange(e.hex, ROLE_RANGE[e.role]) || !hasLineOfSight(e.hex, target))
+      .filter(({ e, dist }) => dist > effectiveAtkRange(e.hex, enemyBaseRange(e), false, target) || !hasLineOfSight(e.hex, target))
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
       .forEach(({ e }) => {
         // Whip's slow composes multiplicatively with terrain exactly like Iron Boots does for
@@ -4980,7 +5625,7 @@
         // the actual attack-eligibility check in simulationStep uses, or a fogged-in unit would
         // decide it's "close enough" at its full role range and just stand there, never actually
         // attacking and never closing the last distance either.
-        const moveRange = effectiveAtkRange(e.hex, ROLE_RANGE[e.role]);
+        const moveRange = effectiveAtkRange(e.hex, enemyBaseRange(e), false, target);
         // Smart units first try to reach TRUE range while avoiding Debris (allowFallback:false —
         // a fallback hit there would just be "closest reachable hex while avoiding debris," which
         // could easily be a worse detour than simply walking through it, so it must not count as
@@ -5008,7 +5653,7 @@
     if (!target) return;
     const s = computeStats();
     const trueSight = isEquipped('truesight');
-    const heroRange = effectiveAtkRange(heroHex, s.atkRange, trueSight); // e.g. Fog Patch caps this to 1, regardless of weapon
+    const heroRange = effectiveAtkRange(heroHex, s.atkRange, trueSight, target.hex); // e.g. Fog Patch caps this to 1, regardless of weapon
     if (hexDistance(heroHex, target.hex) <= heroRange && hasLineOfSight(heroHex, target.hex, trueSight)) return;
     // Terrain is symmetric — Debris slows the hero's own approach exactly like it slows enemies.
     // moveSpeedMult (Iron Boots) is the hero's own pace, composed multiplicatively with terrain
@@ -5017,7 +5662,18 @@
     if (!advanceMoveProgress(hero, terrainAt(heroHex), simDt * s.moveSpeedMult)) return;
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
     terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through blocking terrain either
-    const step = findStepToward(heroHex, target.hex, heroRange, occupied, n => hasLineOfSight(n, target.hex, trueSight));
+    const losCheck = n => hasLineOfSight(n, target.hex, trueSight);
+    // Same "try the nicer set first, fall back if that's impossible" shape resolveEnemyMovement
+    // already uses for smart unit types — Nate's ask: given a genuine choice between a hex that
+    // debuffs (Debris) and one that doesn't, take the clean one. allowFallback:false means a hit
+    // here only counts if it's a REAL route to true range, not just "closest reachable avoiding
+    // Debris" — that fallback flavor could easily be a worse detour than just walking through it,
+    // so it must not count as success; only when this strict attempt fails does the hero fall
+    // through to the plain occupied set, which is perfectly happy to walk straight through Debris.
+    const debrisAvoidingOccupied = new Set(occupied);
+    debrisHexes().forEach(h => debrisAvoidingOccupied.add(hexKey(h.row, h.idx)));
+    const step = findStepToward(heroHex, target.hex, heroRange, debrisAvoidingOccupied, losCheck, false)
+      || findStepToward(heroHex, target.hex, heroRange, occupied, losCheck);
     // Duelist's Blade: any completed hex-step flips this on — checked unconditionally (cheap,
     // harmless for every other weapon) rather than gating the tracking itself on which weapon is
     // equipped, so switching TO Duelist's Blade mid-run doesn't need its own catch-up logic.
@@ -5084,6 +5740,28 @@
     }
   }
 
+  // Guards against the fixed HERO_SPAWN_HEX landing on an invalid hex — Nate's report: a Mage's
+  // Apprentice's shield can happen to cover the spawn point, silently dropping the hero into a
+  // damage-reduction zone with no warning. Rather than requiring the player to place the hero
+  // every single fight (his own first idea, which he flagged as possibly confusing for new
+  // players), this only kicks in on the rare actual conflict: if the plain spawn hex isn't valid,
+  // silently relocate to the closest hex that IS — reusing the exact same validity rule
+  // onBoardClick already applies to a manual relocation, so "valid" never drifts between the two.
+  // Called right after queue/terrainFeatures are (re)built for a new encounter, at every site
+  // that resets heroHex to HERO_SPAWN_HEX.
+  function ensureHeroSpawnIsValid() {
+    const isValidSpawn = hex =>
+      !queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx) &&
+      !terrainBlockingHexes().some(h => h.row === hex.row && h.idx === hex.idx) &&
+      !shieldedHexKeys().has(hexKey(hex.row, hex.idx)) &&
+      (!queue.length || keepsBoardConnected(hex, queue.map(e => e.hex), terrainBlockingHexes()));
+    if (isValidSpawn(heroHex)) return;
+    const fallback = allHexes()
+      .filter(isValidSpawn)
+      .sort((a, b) => hexDistance(a, heroHex) - hexDistance(b, heroHex))[0];
+    if (fallback) heroHex = fallback;
+  }
+
   function onBoardClick(evt) {
     if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
     const rect = canvas.getBoundingClientRect();
@@ -5097,6 +5775,10 @@
     if (placingSetupId) { handleSetupPlacementClick(hex); return; }
     if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return; // enemies block it
     if (terrainBlockingHexes().some(h => h.row === hex.row && h.idx === hex.idx)) return; // e.g. a random Chasm blocks it too
+    if (shieldedHexKeys().has(hexKey(hex.row, hex.idx))) {
+      log("A Mage's Apprentice ward blocks you from setting up that close.", 'crit');
+      return;
+    }
     // Defensive backstop against the softlock class Nate reported (a fully Chasm-ringed empty
     // hex, generated before this fix existed, that the hero could still be relocated into) — even
     // though generation and Ice Wall placement now both reject creating such a pocket in the
@@ -5107,6 +5789,31 @@
     }
     heroHex = hex;
     renderAll();
+  }
+
+  // Name/HP/Damage/ability-if-any for whichever enemy is currently hovered — see onBoardHover.
+  function enemyTooltipText(e) {
+    const t = e.typeId && ENEMY_TYPES[e.typeId];
+    const name = t ? t.name : 'Boss'; // the true floor boss has no typeId (see makeEnemy)
+    const lines = [name, `HP: ${Math.round(e.hp)}/${Math.round(e.maxHp)}`, `Damage: ${Math.round(e.damage)}`];
+    if (t && t.desc) lines.push(t.desc);
+    return lines.join('\n');
+  }
+
+  // Setup-phase-only hover tooltip on enemies — reuses onBoardClick's exact same client-to-
+  // logical coordinate math, then hit-tests against each enemy's own drawn circle (enemyPos,
+  // weight-based radius) rather than the hex grid cell, so it lines up with what's actually
+  // visible on screen. Sets the canvas element's own `title` attribute — the same plain,
+  // browser-native tooltip every other hoverable thing in this game already uses (talisman
+  // chips, weapon rows) — since a canvas has no per-shape DOM node of its own to attach one to.
+  function onBoardHover(evt) {
+    if (phase !== 'prepping' && phase !== 'beginnerPrep') { canvas.title = ''; return; }
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width, scaleY = H / rect.height;
+    const x = (evt.clientX - rect.left) * scaleX;
+    const y = (evt.clientY - rect.top) * scaleY;
+    const hit = queue.find(e => { const p = enemyPos(e); return Math.hypot(x - p.x, y - p.y) <= p.r; });
+    canvas.title = hit ? enemyTooltipText(hit) : '';
   }
 
   function simulationStep() {
@@ -5157,7 +5864,7 @@
     // Same "only accumulate attack progress while actually in range" rule enemies use — the
     // hero doesn't get a burst of pent-up attacks the instant it closes the distance either.
     const heroTarget = currentHeroTarget();
-    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= effectiveAtkRange(heroHex, s.atkRange, isEquipped('truesight')) && hasLineOfSight(heroHex, heroTarget.hex, isEquipped('truesight'))) {
+    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= effectiveAtkRange(heroHex, s.atkRange, isEquipped('truesight'), heroTarget.hex) && hasLineOfSight(heroHex, heroTarget.hex, isEquipped('truesight'))) {
       hero.atkTimer += simDt * terrainAt(heroHex).atkSpeedMult; // e.g. Debris slows the hero's own attacks too
       const heroInterval = 1 / s.atkSpeed;
       while (hero.atkTimer >= heroInterval && phase === 'combat' && queue.length) {
@@ -5172,7 +5879,25 @@
       const cfg = ABILITY_CFG[id];
       const effectiveCooldown = cfg.cooldown * (1 - s.cooldownReductionPct);
       hero.cooldowns[id] = (hero.cooldowns[id] || 0) + simDt;
+      // Cleave and Fireball each bank at most one ready charge — cooldown accumulation caps at
+      // the threshold instead of continuing to climb while waiting for a valid shot, so a long
+      // wait can never queue up a burst the instant one finally opens up.
+      if (id === 'cleave' || id === 'fireball') hero.cooldowns[id] = Math.min(hero.cooldowns[id], effectiveCooldown);
       while (hero.cooldowns[id] >= effectiveCooldown && phase === 'combat' && queue.length) {
+        // Cleave requires the current target be within actual melee reach (1 hex) — otherwise
+        // it just waits, fully charged (see the cap above), rather than firing into empty space
+        // or degenerating into an unlimited-range single hit while wielding a ranged weapon.
+        if (id === 'cleave') {
+          const cleaveTarget = currentHeroTarget();
+          if (!cleaveTarget || hexDistance(heroHex, cleaveTarget.hex) > 1) break;
+        }
+        // Fireball requires an actual target with clear line of sight — otherwise it holds at
+        // full charge (see the cap above) until one's available, rather than firing blind at a
+        // stale/unreachable target and wasting the charge on nothing.
+        if (id === 'fireball') {
+          const fireballTarget = currentHeroTarget();
+          if (!fireballTarget || !hasLineOfSight(heroHex, fireballTarget.hex, isEquipped('truesight'))) break;
+        }
         hero.cooldowns[id] -= effectiveCooldown;
         if (id === 'cleave') triggerCleave();
         if (id === 'afterimage') triggerAfterImage();
@@ -5197,7 +5922,7 @@
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - simDt);
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
       if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
-      if (hexDistance(enemy.hex, enemyTarget) > effectiveAtkRange(enemy.hex, ROLE_RANGE[enemy.role])) return; // e.g. fogged — capped to melee regardless of role
+      if (hexDistance(enemy.hex, enemyTarget) > effectiveAtkRange(enemy.hex, enemyBaseRange(enemy), false, enemyTarget)) return; // e.g. fogged — capped to melee regardless of role
       if (!hasLineOfSight(enemy.hex, enemyTarget)) return; // e.g. Ice Wall blocks the shot, not just adjacency
       enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult; // e.g. Debris slows attacks too, not just movement
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
@@ -5223,10 +5948,11 @@
     dmgNumbers.forEach(n => n.life -= dt * 1.2);
     dmgNumbers = dmgNumbers.filter(n => n.life > 0);
     effects.forEach(e => {
-      const rate = e.type === 'cleaveSlice' ? 1.4 : e.type === 'slash' ? 3.5 : e.type === 'bolt' ? 2.8
-        : e.type === 'shock' ? 4 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2
+      const rate = e.type === 'cleaveSlice' ? 1.4 : e.type === 'cleaveGlow' ? 1.6 : e.type === 'slash' ? 3.5 : e.type === 'bolt' ? 2.8
+        : e.type === 'shock' ? 4 : e.type === 'mageZap' ? 3 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2
         : e.type === 'fireballBolt' ? 2.8 : e.type === 'fireballBurst' ? 1.0 : e.type === 'hurricane' ? 1.2
-        : e.type === 'magicMissileBolt' ? 2.8
+        : e.type === 'magicMissileBolt' ? 2.8 : e.type === 'wandOrb' ? 2.8
+        : e.type === 'boomerangThrow' ? 1.0 // slower — needs to stay visible across its whole multi-hop + return flight
         : e.type === 'falling' ? 0.55 : 2;
       e.life -= dt * rate;
     });
@@ -5280,6 +6006,7 @@
 
   document.getElementById('startWaveBtn').addEventListener('click', startFight);
   document.getElementById('game').addEventListener('click', onBoardClick);
+  document.getElementById('game').addEventListener('mousemove', onBoardHover);
   document.getElementById('restartBtn').addEventListener('click', restart);
   document.getElementById('wipeBtn').addEventListener('click', () => {
     if (window.confirm('This permanently erases your Legacy upgrades, essence and best wave record. Continue?')) wipeAllProgress();
