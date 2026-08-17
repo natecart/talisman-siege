@@ -59,19 +59,20 @@
      ask: "no more different windows... imagine it's all just one window now with different
      menus/sections within it." */
   #gameWindow { padding: 10px; }
-  /* The canvas's own board (640x420 = ~1.52:1) used to size purely off available WIDTH, so
-     widening #app to fit a big monitor (see max-width above) also made the canvas taller in
-     lockstep, which is what was pushing the page past typical viewport heights. Width is now
-     capped at whichever is smaller: the full flex column, or the width the vertical budget
-     (~560px of topbar/bottom-row/etc. measured around it, see comment below) allows once
-     converted through the 640:420 ratio — aspect-ratio then derives height from THAT width, so
-     the box is always internally consistent and the canvas (height:100% instead of the old
-     width-only rule) never renders squished. A plain max-height clamp was tried first and
-     rejected — for a block box whose width is a definite value (not auto), browsers clamp height
-     alone without reflowing width back down, which stretched the hex board vertically. */
+  /* The canvas's own board (700x420 = 5:3, widened from 640x420/32:21 when the hex board grew
+     from 7 to 13 columns — see HEX_ROWS) used to size purely off available WIDTH, so widening
+     #app to fit a big monitor (see max-width above) also made the canvas taller in lockstep,
+     which is what was pushing the page past typical viewport heights. Width is now capped at
+     whichever is smaller: the full flex column, or the width the vertical budget (~480px of
+     topbar/bottom-row/etc. measured around it, see comment below) allows once converted through
+     the 700:420 ratio — aspect-ratio then derives height from THAT width, so the box is always
+     internally consistent and the canvas (height:100% instead of the old width-only rule) never
+     renders squished. A plain max-height clamp was tried first and rejected — for a block box
+     whose width is a definite value (not auto), browsers clamp height alone without reflowing
+     width back down, which stretched the hex board vertically. */
   #canvasWrap {
-    width: min(100%, calc((100vh - 480px) * 32 / 21));
-    aspect-ratio: 640 / 420;
+    width: min(100%, calc((100vh - 480px) * 5 / 3));
+    aspect-ratio: 700 / 420;
     min-width: 320px;
     margin: 0 auto;
   }
@@ -342,7 +343,7 @@
   <div id="gameWindow" class="panel">
     <div class="windowMain">
       <div id="canvasWrap">
-        <canvas id="game" width="640" height="420"></canvas>
+        <canvas id="game" width="700" height="420"></canvas>
       </div>
       <div id="pathPanel" style="display:none">
         <h2>Choose Your Next Encounter</h2>
@@ -384,8 +385,8 @@
       </div>
       <div id="abilitiesSection" class="windowSection">
         <h2>Abilities</h2>
-        <div id="abilitiesPanel"><span class="empty">No active abilities yet — some talismans grant one.</span></div>
-        <div class="overlaySubLabel">Setup Abilities</div>
+        <div id="abilitiesPanel"><span class="empty">No abilities yet — some talismans grant one.</span></div>
+        <div id="setupAbilitiesLabel" class="overlaySubLabel">Setup Abilities</div>
         <div id="setupAbilitiesPanel"><span class="empty">No setup abilities yet — some talismans grant one.</span></div>
       </div>
     </div>
@@ -505,13 +506,23 @@
   const LUNGE_DIST = 16; // px a character lunges toward its target at the moment it attacks
 
   // ---------------- Hex battlefield ----------------
-  // The whole field is a hex grid: "row" is actually a horizontal column index from -3 (far
-  // left) to 3 (far right), row 0 centered on screen; "idx" is the vertical position within
-  // that column. Column height alternates 7 (rows -2, 0, 2) / 6 (rows -3, -1, 1, 3) — standard
-  // hex tessellation, since neighboring columns always differ in height by exactly one. The
+  // The whole field is a hex grid: "row" is actually a horizontal column index from -6 (far
+  // left) to 6 (far right), row 0 centered on screen; "idx" is the vertical position within
+  // that column. Column height alternates 7 (even |row|) / 6 (odd |row|) — standard hex
+  // tessellation, since neighboring columns always differ in height by exactly one. The
   // hero spawns at the vertical center of row -2 and doesn't move (yet — see heroTargetId
   // below for why a future reposition ability needs to clear the sticky target).
-  const HEX_ROWS = [-3, -2, -1, 0, 1, 2, 3];
+  // Widened from the original -3..3 (7 columns, 45 hexes) to -6..6 (13 columns, 85 hexes) —
+  // Nate's ask to roughly double the board by adding columns on both sides without adding any
+  // height. An exact 90-hex double isn't reachable with this alternating-height rule extended
+  // symmetrically around row 0 (any symmetric range lands on 85 or 97, never exactly 90 — the
+  // parity math only ever produces those two neighbors), so 85 (adding 3 columns each side) was
+  // picked as the closer, still-symmetric option. Every downstream system here (neighborsOf,
+  // hexDistance, spawning, terrain, Ice Wall connectivity, Ambush's multi-side placement) reads
+  // HEX_ROWS/rowHeight generically rather than hardcoding the old 7-column bounds, so none of it
+  // needed touching — the only two hardcoded exceptions were the boss's fixed far-edge spawn hex
+  // and this HEX_ROWS list itself (see buildQueueFromEncounter).
+  const HEX_ROWS = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
   // Derived from a single size using the standard flat-top hex formulas (1.5x for column
   // spacing, sqrt(3)x for row spacing) so neighboring tiles tessellate edge-to-edge with no
   // gap, rather than hand-picked numbers that left visible dead space between tiles. Sized so
@@ -553,7 +564,7 @@
 
   // BFS over the real adjacency graph rather than a closed-form formula — guarantees distance
   // is always exactly consistent with the neighbor rule movement actually uses, on a board
-  // this small (45 hexes) the cost is a non-issue.
+  // this small (85 hexes) the cost is a non-issue.
   function hexDistance(a, b) {
     if (a.row === b.row && a.idx === b.idx) return 0;
     const seen = new Set([hexKey(a.row, a.idx)]);
@@ -1447,7 +1458,7 @@
       list.push(makeEnemy(enc.hp, enc.dmg, {
         isBoss: true, weight: 'boss', role: 'melee', atkInterval: WAVE_CFG.enemyAtkInterval,
         moveSpeed: WAVE_CFG.enemyMoveSpeed, // no ENEMY_TYPES entry (no moveSpeedMult) — the boss uses the flat baseline
-        hex: { row: 3, idx: Math.floor(rowHeight(3) / 2) },
+        hex: { row: HEX_ROWS[HEX_ROWS.length - 1], idx: Math.floor(rowHeight(HEX_ROWS[HEX_ROWS.length - 1]) / 2) },
       }));
       return list;
     }
@@ -2540,9 +2551,31 @@
     setStatRow('statRowLifesteal', 'lifesteal', Math.round(s.lifestealPct * 100) + '%');
     setStatRow('statRowThorns', 'thorns', Math.round(s.thornsPct * 100) + '%');
     setStatRow('statRowDodge', 'dodge', Math.round(s.dodgeChance * 100) + '%');
+    renderAbilitiesSection();
+    renderTerrainKeyPanel();
+  }
+
+  // When the player owns neither an active nor a setup ability, showing both sub-panels' own
+  // "no X yet" empty states back to back reads as redundant (two near-identical sentences one
+  // right after the other) — collapse to a single combined message and hide the Setup Abilities
+  // divider/sub-panel entirely in that case. The moment either category has something equipped,
+  // the two ARE genuinely different pieces of info (cooldown bars vs. pre-fight placement), so
+  // they render separately again as normal, empty state included, for whichever one is still bare.
+  function renderAbilitiesSection() {
+    const hasActive = Object.keys(ABILITY_CFG).some(id => isEquipped(id));
+    const hasSetup = SETUP_TALISMAN_IDS.some(id => isEquipped(id));
+    const setupLabel = document.getElementById('setupAbilitiesLabel');
+    const setupPanel = document.getElementById('setupAbilitiesPanel');
+    if (!hasActive && !hasSetup) {
+      document.getElementById('abilitiesPanel').innerHTML = '<span class="empty">No abilities yet — some talismans grant one.</span>';
+      setupLabel.style.display = 'none';
+      setupPanel.style.display = 'none';
+      return;
+    }
+    setupLabel.style.display = '';
+    setupPanel.style.display = '';
     renderAbilitiesPanel();
     renderSetupAbilitiesPanel();
-    renderTerrainKeyPanel();
   }
 
   function renderAbilitiesPanel() {
@@ -3871,7 +3904,7 @@
 
   // Random battlefield terrain — rolled fresh for every combat encounter (see choosePath/
   // enterBeginnerPrep/enterBossPrep, right after the enemy queue is built) so it's always at
-  // least some terrain, never none: total coverage is a random 20-50% of the board's 45 hexes,
+  // least some terrain, never none: total coverage is a random 20-50% of the board's hexes,
   // mixing all 3 types freely hex-by-hex (Nate's explicit call — "that'll be exciting, we can
   // scale back or up as needed"). Never placed under the hero or any enemy's starting hex,
   // regardless of type — may reconsider for Fog Patch specifically later since it doesn't block
