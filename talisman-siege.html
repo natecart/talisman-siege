@@ -643,7 +643,7 @@
   const STAT_LABELS = {
     critChance: 'Crit Chance', regen: 'HP Regen', lifesteal: 'Lifesteal', thorns: 'Thorns', dodge: 'Dodge Chance',
     damageReduction: 'Damage Reduction', atkSpeedScaling: 'Attack Speed Scaling',
-    dmg: 'Damage', maxHP: 'Max HP', atkSpeed: 'Attack Speed', gold: 'Gold', cooldownReduction: 'Cooldown Reduction', armor: 'Armor',
+    dmg: 'Damage', maxHP: 'Max HP', atkSpeed: 'Attack Speed', gold: 'Gold', cooldownReduction: 'Cooldown Reduction', armor: 'Armor', atkRange: 'Attack Range',
   };
 
   const UPGRADES = [
@@ -791,6 +791,10 @@
       triggerType: 'ability', scalesWith: ['dmg'], frequencyGate: 'cooldown' },
     { id: 'hurricane',   tier: 'major', type: 'ability', icon: '\u{1F32C}\u{FE0F}', name: "Hurricane's Might", desc: `Every ${ABILITY_CFG.hurricane.cooldown}s, a swirling gust pushes every enemy within ${HURRICANE_RADIUS} hexes outward and around you — anything shoved into a Chasm falls to its death.`,
       triggerType: 'ability', frequencyGate: 'cooldown' },
+    { id: 'marksmansreach', tier: 'minor', icon: '\u{1F4CF}', name: "Marksman's Reach", desc: '+1 attack range with Sword, +1 with Spear, +2 with Crossbow.',
+      triggerType: 'passive', modifies: ['atkRange'] },
+    { id: 'truesight',   tier: 'minor', icon: '\u{1F441}\u{FE0F}', name: 'True Sight', desc: "See past Fog Patch and other sight-blockers that don't physically bar your path, as if they weren't there — doesn't help against a real barrier like Ice Wall or Ruins.",
+      triggerType: 'passive' },
   ];
 
   const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
@@ -1497,6 +1501,14 @@
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
 
+    // +1 Sword/Spear, +2 Crossbow — a flat bonus per weapon rather than a % of ROLE_RANGE, since
+    // scaling Sword's already-tiny range of 1 by a percentage wouldn't add up to anything
+    // meaningful the way it would for Crossbow.
+    if (has('marksmansreach')) {
+      if (equippedWeapon === 'sword') atkRange += 1;
+      else if (equippedWeapon === 'spear') atkRange += 1;
+      else if (equippedWeapon === 'crossbow') atkRange += 2;
+    }
     if (has('thickhide')) { maxHP *= 1.40; atkSpeed *= 0.80; }
     if (has('glasscannon')) { dmg *= 1.40; maxHP *= 0.75; }
     if (has('goldentouch')) goldMult *= 1.3;
@@ -1765,7 +1777,7 @@
     const target = currentHeroTarget();
     if (!target) { pickHeroTarget(); return; }
     const s = computeStats();
-    if (hexDistance(heroHex, target.hex) <= effectiveAtkRange(heroHex, s.atkRange) && hasLineOfSight(heroHex, target.hex)) return; // already engaged — stay locked on
+    if (hexDistance(heroHex, target.hex) <= effectiveAtkRange(heroHex, s.atkRange, isEquipped('truesight')) && hasLineOfSight(heroHex, target.hex, isEquipped('truesight'))) return; // already engaged — stay locked on
 
     // Top priority: some OTHER enemy is already within ITS OWN role range + LOS of the hero —
     // i.e. actively able to attack (or already attacking) — while the current target isn't even
@@ -3997,6 +4009,12 @@
     // jab toward its current target at the moment it attacks. Both are purely cosmetic offsets.
     const s = computeStats();
     const heroP = heroPixelPos();
+    // Wherever enemies currently perceive as "the hero" — the decoy's position while an After
+    // Image is up (see aggroHex/enemyAttack), otherwise the real hero. Enemies should visibly
+    // face and lunge toward whatever they're actually attacking, not always the real hero's
+    // position — Nate caught this exact mismatch (an enemy about to hit the decoy was still
+    // drawn facing the real hero instead).
+    const aggroP = hero.decoy ? hexPixelPos(hero.decoy.hex.row, hero.decoy.hex.idx) : heroP;
     const heroShake = heroFlash > 0 ? (Math.random() - 0.5) * 6 * heroFlash : 0;
     const heroTarget = currentHeroTarget();
     const heroTargetP = heroTarget ? enemyPos(heroTarget) : heroP;
@@ -4033,10 +4051,10 @@
       queue.forEach(enemy => {
         const p = enemyPos(enemy);
         const shake = enemy.flash > 0 ? (Math.random() - 0.5) * 6 * enemy.flash : 0;
-        const lungeOff = lungeOffset(p.x, p.y, heroP.x, heroP.y, enemy.lunge);
+        const lungeOff = lungeOffset(p.x, p.y, aggroP.x, aggroP.y, enemy.lunge);
         const notable = enemy.isBoss || enemy.weight === 'miniboss' || enemy.weight === 'boss';
         const color = notable ? '#d97b3f' : (ROLE_COLOR[enemy.role] || '#c25b5b');
-        const angle = Math.atan2(heroP.y - p.y, heroP.x - p.x);
+        const angle = Math.atan2(aggroP.y - p.y, aggroP.x - p.x);
         const atkProgress = Math.min(1, (enemy.atkTimer + simExtrapolation) / enemy.atkInterval);
         const visuals = (enemy.typeId && ENEMY_VISUALS[enemy.typeId]) || {};
         drawFacingUnit(p.x + shake + lungeOff.x, p.y + lungeOff.y, p.r, angle, color, notable, atkProgress, { ...visuals, hitProgress: enemy.flash });
@@ -4340,8 +4358,14 @@
   // was never actually checked anywhere. Routed through terrainAt's rangeCap axis (Math.min, same
   // pattern as speedMult/atkSpeedMult) rather than a fog-specific check, so a future terrain type
   // that caps range differently composes for free with anything else that does too.
-  function effectiveAtkRange(fromHex, baseRange) {
-    return Math.min(baseRange, terrainAt(fromHex).rangeCap);
+  // `ignorePassableBlockers` (True Sight, hero-only — see hasLineOfSight for the same hook)
+  // lifts the cap specifically when whatever's imposing it doesn't ALSO blockMovement — today
+  // that's only ever Fog Patch, which is walkable, so True Sight negates its own-hex range cap
+  // exactly like it negates fog sitting between the hero and a target.
+  function effectiveAtkRange(fromHex, baseRange, ignorePassableBlockers) {
+    const t = terrainAt(fromHex);
+    if (ignorePassableBlockers && !t.blocksMovement) return baseRange;
+    return Math.min(baseRange, t.rangeCap);
   }
 
   // Every hex that currently blocks movement — used to seed the `occupied` set in both movement
@@ -4493,9 +4517,19 @@
     return between;
   }
 
-  function hasLineOfSight(fromHex, toHex) {
+  // `ignorePassableBlockers` is True Sight's hook (see TALISMANS) — "if you could walk through
+  // it, you can see through it": a blocking hex only still counts when it ALSO blocksMovement
+  // (Ice Wall, Ruins), so Fog Patch (walkable) gets bypassed while real barriers don't. Only the
+  // hero's OWN sight ever passes this — every enemy-side call (an enemy checking its own shot at
+  // the hero) omits it, since True Sight is the hero's gear, not a change to the terrain itself.
+  function hasLineOfSight(fromHex, toHex, ignorePassableBlockers) {
     if (!terrainBlockingLOSHexes().length) return true; // fast path — nothing currently blocks LOS at all
-    return !hexesBetween(fromHex, toHex).some(h => terrainAt(h).blocksLOS);
+    return !hexesBetween(fromHex, toHex).some(h => {
+      const t = terrainAt(h);
+      if (!t.blocksLOS) return false;
+      if (ignorePassableBlockers && !t.blocksMovement) return false;
+      return true;
+    });
   }
 
   // Every unit farther than its role's range steps toward the hero — closer units move first
@@ -4570,13 +4604,14 @@
     const target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
-    const heroRange = effectiveAtkRange(heroHex, s.atkRange); // e.g. Fog Patch caps this to 1, regardless of weapon
-    if (hexDistance(heroHex, target.hex) <= heroRange && hasLineOfSight(heroHex, target.hex)) return;
+    const trueSight = isEquipped('truesight');
+    const heroRange = effectiveAtkRange(heroHex, s.atkRange, trueSight); // e.g. Fog Patch caps this to 1, regardless of weapon
+    if (hexDistance(heroHex, target.hex) <= heroRange && hasLineOfSight(heroHex, target.hex, trueSight)) return;
     // Terrain is symmetric — Debris slows the hero's own approach exactly like it slows enemies.
     if (!advanceMoveProgress(hero, terrainAt(heroHex), simDt)) return;
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
     terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through blocking terrain either
-    const step = findStepToward(heroHex, target.hex, heroRange, occupied, n => hasLineOfSight(n, target.hex));
+    const step = findStepToward(heroHex, target.hex, heroRange, occupied, n => hasLineOfSight(n, target.hex, trueSight));
     if (step) heroHex = step;
   }
 
@@ -4713,7 +4748,7 @@
     // Same "only accumulate attack progress while actually in range" rule enemies use — the
     // hero doesn't get a burst of pent-up attacks the instant it closes the distance either.
     const heroTarget = currentHeroTarget();
-    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= effectiveAtkRange(heroHex, s.atkRange) && hasLineOfSight(heroHex, heroTarget.hex)) {
+    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= effectiveAtkRange(heroHex, s.atkRange, isEquipped('truesight')) && hasLineOfSight(heroHex, heroTarget.hex, isEquipped('truesight'))) {
       hero.atkTimer += simDt * terrainAt(heroHex).atkSpeedMult; // e.g. Debris slows the hero's own attacks too
       const heroInterval = 1 / s.atkSpeed;
       while (hero.atkTimer >= heroInterval && phase === 'combat' && queue.length) {
