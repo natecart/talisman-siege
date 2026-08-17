@@ -182,13 +182,15 @@
   .setupAbilityControls { display: flex; align-items: center; gap: 6px; }
   .setupAbilityControls button { padding: 3px 8px; font-size: 11px; }
   .setupStatus, .setupHint { font-size: 11px; color: #888; }
+  .setupPlacementError { flex-basis: 100%; font-size: 11px; color: #e88; margin-top: 2px; }
 
   #terrainKeyPanel .empty { color: #666; font-size: 12px; }
   .terrainKeyRow { display: flex; align-items: center; gap: 7px; padding: 3px 0; font-size: 12px; color: #ccc; cursor: default; }
   .terrainKeySwatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
-  .terrainKeySwatch.swatch-chasm { background: radial-gradient(circle, #08080a, #302f38); border: 1px solid #000; }
+  .terrainKeySwatch.swatch-chasm { background: radial-gradient(circle, #000000, #2b1f16); border: 1px solid #000; }
   .terrainKeySwatch.swatch-fogpatch { background: rgba(225,228,232,0.55); border: 1px solid rgba(200,203,208,0.5); }
   .terrainKeySwatch.swatch-debris { background: #5c4a3a; border: 1px solid #3d3128; }
+  .terrainKeySwatch.swatch-ruins { background: #6b6558; border: 1px solid #3d3a35; }
 
   .shopRow {
     display: flex;
@@ -672,23 +674,28 @@
   // Rolled fresh for every combat encounter (see generateTerrainForEncounter) — unlike Ice Wall/
   // Bear Trap, the player never places this, and unlike Smoke Screen it's symmetric: it affects
   // the hero exactly the same way it affects enemies, since it's passive environment rather than
-  // a player-cast tool aimed at enemies. Each type owns exactly one terrainAt() axis, by design:
+  // a player-cast tool aimed at enemies. Most types own exactly one terrainAt() axis, by design:
   // Chasm blocks movement only (you can still shoot/see over it — it's a pit, not a wall), Fog
   // Patch blocks sight only (fully walkable), Debris blocks neither but taxes whoever's standing
-  // in it. blocksMovement/blocksLOS/speedMult/atkSpeedMult are read by terrainAt to build the
-  // merged per-hex descriptor; any key a type doesn't set keeps terrainAt's neutral default.
+  // in it. Ruins is the deliberate exception — a standing wall, like the Ice Wall talisman, so it
+  // owns BOTH axes at once. blocksMovement/blocksLOS/speedMult/atkSpeedMult are read by terrainAt
+  // to build the merged per-hex descriptor; any key a type doesn't set keeps terrainAt's neutral
+  // default. Ruins needing blocksMovement means it automatically inherits every existing
+  // Chasm-shaped protection for free — the generation-time softlock check, Ice Wall placement's
+  // own softlock check, and the hero-relocate-during-prep guard all key off
+  // `TERRAIN_TYPES[f.type].blocksMovement` generically rather than naming Chasm specifically, so
+  // none of them needed touching to add this.
   const TERRAIN_TYPES = {
     chasm:    { id: 'chasm',    name: 'Chasm',     blocksMovement: true,
       keyDesc: 'Impassable to normal movement — everyone, including you, must path around it. It doesn\'t block line of sight, so ranged attacks still fly straight over it.' },
-    fogpatch: { id: 'fogpatch', name: 'Fog Patch', blocksLOS: true,
-      keyDesc: 'Blocks line of sight through it — anyone (including you) trying to attack at range through the fog is blocked. Fully walkable, and never affects melee, since there\'s nothing "between" two adjacent hexes to see through.' },
+    fogpatch: { id: 'fogpatch', name: 'Fog Patch', blocksLOS: true, rangeCap: 1,
+      keyDesc: 'Blocks line of sight through it, and impairs your OWN vision too — while you\'re standing in fog, you can only attack an adjacent hex, regardless of weapon range. Fully walkable, and someone standing in fog can still be hit normally by an attacker who isn\'t, unless another fog hex sits between you.' },
     debris:   { id: 'debris',   name: 'Debris',    speedMult: 0.5, atkSpeedMult: 0.5,
       keyDesc: 'Slows movement and attack speed by 50% for whoever is standing in it — including you.' },
+    ruins:    { id: 'ruins',    name: 'Ruins',     blocksMovement: true, blocksLOS: true,
+      keyDesc: 'A ruined wall segment — impassable and blocks line of sight, exactly like an Ice Wall. Ruins hexes standing next to each other visually connect into one continuous wall.' },
   };
   const TERRAIN_TYPE_IDS = Object.keys(TERRAIN_TYPES);
-  // Random flourish drawn on top of each Debris hex, picked once at generation time (not
-  // re-rolled per frame, or it would flicker) — purely decorative, no gameplay effect.
-  const DEBRIS_DETAILS = ['sword', 'shield', 'barrel'];
 
   // ---------------- Data: talismans ----------------
   // Minor talismans are numeric/utility tweaks, offered after wave 3 of every arc.
@@ -726,7 +733,7 @@
       triggerType: 'passive', modifies: ['dmg', 'maxHP'] },
     { id: 'regen',       tier: 'major', icon: '\u{2764}',  name: 'Regeneration',  desc: 'Regen 2.5% of max HP per second.', unlocksStat: 'regen',
       triggerType: 'passive', scalesWith: ['maxHP'] },
-    { id: 'thorns',      tier: 'minor', icon: '\u{1F332}', name: 'Thorns',        desc: 'Reflect 25% of damage taken back at the attacker.', unlocksStat: 'thorns',
+    { id: 'thorns',      tier: 'minor', icon: '\u{1F332}', name: 'Thorns',        desc: 'Reflect 25% of damage taken back at the attacker — calculated after Armor and Damage Reduction already shrink it, so more mitigation means less to reflect.', unlocksStat: 'thorns',
       triggerType: 'reactive', scalesWith: ['armor'] },
     { id: 'luckycharm',  tier: 'minor', icon: '\u{1F340}', name: 'Lucky Charm',   desc: '12% chance to fully dodge an attack.', unlocksStat: 'dodge',
       triggerType: 'reactive' },
@@ -1323,6 +1330,14 @@
   let beartrapHex = null;    // committed trap hex, or null if not placed; consumed (nulled) on trigger
   let pendingWallHexes = []; // in-progress Ice Wall selection, only touched while placingSetupId === 'icewall'
   let placingSetupId = null; // 'icewall' | 'beartrap' | null — which setup ability the next hex click affects
+  // User-facing reason the last placement click/Accept was rejected, or null — shown inline in
+  // that ability's own row in the Setup Abilities panel (see setSetupPlacementError). Re-added
+  // after Nate reported placement attempts silently doing nothing: the game DID already have an
+  // explanatory log() line for the Accept-time softlock rejection, but #log itself has been
+  // display:none since the item-26 UI overhaul, so that message was landing nowhere anyone could
+  // see. The per-click rejections in handleSetupPlacementClick never had any feedback at all,
+  // silent from day one.
+  let setupPlacementError = null;
 
   // Random battlefield terrain (Chasm/Fog Patch/Debris) — rolled once per combat encounter by
   // generateTerrainForEncounter, at the same moment the enemy queue is built (choosePath/
@@ -1699,7 +1714,7 @@
     const target = currentHeroTarget();
     if (!target) { pickHeroTarget(); return; }
     const s = computeStats();
-    if (hexDistance(heroHex, target.hex) <= s.atkRange && hasLineOfSight(heroHex, target.hex)) return; // already engaged — stay locked on
+    if (hexDistance(heroHex, target.hex) <= effectiveAtkRange(heroHex, s.atkRange) && hasLineOfSight(heroHex, target.hex)) return; // already engaged — stay locked on
 
     // Top priority: some OTHER enemy is already within ITS OWN role range + LOS of the hero —
     // i.e. actively able to attack (or already attacking) — while the current target isn't even
@@ -1708,7 +1723,7 @@
     // hits. Switch immediately rather than running the distance-margin check below, which is
     // tuned for the slower "my target drifted farther away" case, not "I'm being hit right now."
     const attacker = queue.find(e => e.id !== target.id &&
-      hexDistance(e.hex, heroHex) <= ROLE_RANGE[e.role] && hasLineOfSight(e.hex, heroHex));
+      hexDistance(e.hex, heroHex) <= effectiveAtkRange(e.hex, ROLE_RANGE[e.role]) && hasLineOfSight(e.hex, heroHex));
     if (attacker) { heroTargetId = attacker.id; return; }
 
     // Otherwise, re-check whether a different enemy has become clearly closer (see item 24's
@@ -1887,6 +1902,13 @@
   // at distance 4 is free (board edge, or every distance-4 hex is occupied).
   function pickAfterImageHex() {
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
+    // Never valid decoy-swap destinations — Nate reported landing on an Ice Wall hex, and this
+    // set never excluded terrain-blocking hexes at all (only ever checked against enemies). Not
+    // actually caused by the board-widening math itself (this exact gap existed on the old
+    // 45-hex board too), but far more likely to get hit now: more total hexes plus the same
+    // 20-50% terrain coverage percentage means more terrain overall, and a wider board gives this
+    // function's up-to-4-ring search radius more room to land on some far-flung wall segment.
+    terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx)));
     for (let d = 4; d >= 1; d--) {
       const ring = allHexes().filter(h => hexDistance(h, heroHex) === d && !occupied.has(hexKey(h.row, h.idx)));
       if (!ring.length) continue;
@@ -2744,10 +2766,18 @@
 
   // Ice Wall placement — entering/leaving placement mode never touches the already-committed
   // iceWallHexes, so a mid-placement Cancel always leaves whatever was placed before intact.
+  // Sets the visible rejection reason and re-renders just the Setup Abilities panel (cheap —
+  // no need for a full renderAll() for a text-only change) rather than the old silent `return`.
+  function setSetupPlacementError(msg) {
+    setupPlacementError = msg;
+    renderSetupAbilitiesPanel();
+  }
+
   function beginWallPlacement() {
     if (phase !== 'prepping' && phase !== 'beginnerPrep') return;
     pendingWallHexes = [];
     placingSetupId = 'icewall';
+    setupPlacementError = null;
     renderAll();
   }
   function acceptWallPlacement() {
@@ -2768,18 +2798,20 @@
     const blockedSet = new Set(candidateBlocked.map(h => hexKey(h.row, h.idx)));
     const reachTargets = allHexes().filter(h => !blockedSet.has(hexKey(h.row, h.idx)));
     if (!keepsBoardConnected(heroHex, reachTargets, candidateBlocked)) {
-      log('That wall would seal off part of the board completely — try a different shape or spot.', 'crit');
+      setSetupPlacementError('That wall would seal off part of the board completely — try a different shape or spot.');
       return;
     }
     iceWallHexes = pendingWallHexes.slice();
     pendingWallHexes = [];
     placingSetupId = null;
+    setupPlacementError = null;
     log(`Ice Wall placed across ${iceWallHexes.length} hex${iceWallHexes.length > 1 ? 'es' : ''}.`, 'wave');
     renderAll();
   }
   function cancelWallPlacement() {
     pendingWallHexes = [];
     placingSetupId = null;
+    setupPlacementError = null;
     renderAll();
   }
 
@@ -2843,7 +2875,7 @@
           controls.appendChild(hint);
           const cancelBtn = document.createElement('button');
           cancelBtn.textContent = 'Cancel';
-          cancelBtn.addEventListener('click', () => { placingSetupId = null; renderAll(); });
+          cancelBtn.addEventListener('click', () => { placingSetupId = null; setupPlacementError = null; renderAll(); });
           controls.appendChild(cancelBtn);
         } else {
           const status = document.createElement('span');
@@ -2853,13 +2885,22 @@
           if (canPlace) {
             const btn = document.createElement('button');
             btn.textContent = beartrapHex ? 'Re-place' : 'Place';
-            btn.addEventListener('click', () => { placingSetupId = 'beartrap'; renderAll(); });
+            btn.addEventListener('click', () => { placingSetupId = 'beartrap'; setupPlacementError = null; renderAll(); });
             controls.appendChild(btn);
           }
         }
       }
 
       row.appendChild(controls);
+      // Rendered in whichever ability's own row is currently placing — "ideally by the setup
+      // ability you're trying to use," not a generic toast — so it's obvious which control the
+      // rejection belongs to when both Ice Wall and Bear Trap are owned at once.
+      if (setupPlacementError && placingSetupId === id) {
+        const err = document.createElement('div');
+        err.className = 'setupPlacementError';
+        err.textContent = setupPlacementError;
+        row.appendChild(err);
+      }
       el.appendChild(row);
     });
   }
@@ -3039,11 +3080,14 @@
 
   // Shop and Loadout & Inventory show as separate boxes, both visible at once, during both
   // 'prepping' and 'beginnerPrep' — the very first fight gets the same weapon/loadout/shop access
-  // as every other encounter now, rather than being specially skipped. Only the
-  // choosing/combat/gameover phases hide them entirely. Terrain Key lives outside this function
+  // as every other encounter now, rather than being specially skipped. Also stays up (read-only —
+  // buy/equip/reroll all separately gate on phase themselves already, see equipTalisman/
+  // buyUpgrade/rerollShop) during 'choosing', per Nate's ask to review your build while still
+  // deciding which fight to take next, rather than it vanishing the moment the fight ends. Only
+  // combat/gameover/roomVisit/starterPick hide them. Terrain Key lives outside this function
   // (see renderHeroPanel/renderTerrainKeyPanel) since it stays visible in every phase.
   function renderPrepBoxes() {
-    const show = phase === 'prepping' || phase === 'beginnerPrep';
+    const show = phase === 'prepping' || phase === 'beginnerPrep' || phase === 'choosing';
     document.getElementById('shopSection').style.display = show ? '' : 'none';
     document.getElementById('loadoutSection').style.display = show ? '' : 'none';
     renderLoadoutTab();
@@ -3436,6 +3480,31 @@
     ctx.stroke();
   }
 
+  // A small tile drawn once at startup (never per-frame — patterns tile in canvas-space, not
+  // per-shape, so filling every hex with this same pattern object gives a seamless continuous
+  // grass field rather than each hex getting its own independently-random speckle pattern).
+  // Procedural rather than an embedded photo, to match the flat/vector look every other terrain
+  // type already uses (Chasm's gradient, Debris's speckles) instead of clashing with a
+  // photorealistic texture.
+  const GRASS_PATTERN = (function () {
+    const tile = document.createElement('canvas');
+    tile.width = 24; tile.height = 24;
+    const tctx = tile.getContext('2d');
+    tctx.fillStyle = '#33472e';
+    tctx.fillRect(0, 0, 24, 24);
+    const flecks = [
+      ['#2a3a26', 3, 4, 2], ['#3d5636', 9, 2, 2], ['#26331f', 15, 9, 2], ['#455e3c', 5, 14, 2],
+      ['#2e4128', 18, 17, 2], ['#4a6640', 12, 20, 2], ['#293a24', 21, 6, 1.5], ['#3a5031', 2, 18, 1.5],
+    ];
+    flecks.forEach(([color, x, y, r]) => {
+      tctx.fillStyle = color;
+      tctx.beginPath();
+      tctx.arc(x, y, r, 0, Math.PI * 2);
+      tctx.fill();
+    });
+    return ctx.createPattern(tile, 'repeat');
+  })();
+
   function drawHexGrid() {
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.07)';
@@ -3443,7 +3512,10 @@
     HEX_ROWS.forEach(row => {
       for (let idx = 0; idx < rowHeight(row); idx++) {
         const p = hexPixelPos(row, idx);
-        drawHexOutline(p.x, p.y, HEX_RADIUS);
+        hexPathAt(p);
+        ctx.fillStyle = GRASS_PATTERN;
+        ctx.fill();
+        ctx.stroke();
       }
     });
     ctx.restore();
@@ -3531,9 +3603,11 @@
   // blocks movement, not LOS. The gradient is also the natural hook for a future Shove ability:
   // a unit pushed in could shrink/fade toward this same center point as it "falls."
   function drawChasmHex(p) {
+    // Pitch black at the true depth, fading out to a dark brown dirt rim rather than the old
+    // grey — reads as an actual pit dug into the ground instead of a stone-grey hole.
     const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, HEX_RADIUS);
-    grad.addColorStop(0, '#08080a');
-    grad.addColorStop(1, '#302f38');
+    grad.addColorStop(0, '#000000');
+    grad.addColorStop(1, '#2b1f16');
     hexPathAt(p);
     ctx.fillStyle = grad;
     ctx.fill();
@@ -3542,51 +3616,26 @@
     ctx.stroke();
   }
 
-  // Debris — a brown/grey rubble base with a couple of fixed (never randomized per-frame, or
-  // it'd flicker) rock speckles for texture, plus one decorative flourish rolled once at
-  // generation time (see DEBRIS_DETAILS/generateTerrainForEncounter). Purely cosmetic — the
-  // slow-movement/slow-attack effect lives entirely in TERRAIN_TYPES.debris.
-  const DEBRIS_ROCK_OFFSETS = [[-9, -5], [7, -8], [-5, 7], [9, 5], [0, -1]];
-  function drawDebrisHex(p, detail) {
+  // Debris — a brown rubble base scattered with dark-brown and dark-grey trash-particle
+  // speckles, fixed per-hex (never re-rolled per frame, or it'd flicker) — reads as scattered
+  // refuse/rubble rather than the sword/shield/barrel silhouettes this used to draw, per Nate's
+  // ask for "random trash particles" instead of "random scattered weapons." Purely cosmetic —
+  // the slow-movement/slow-attack effect lives entirely in TERRAIN_TYPES.debris.
+  const DEBRIS_SPECKLES = [
+    ['#3d2f24', -9, -5, 3], ['#242424', 7, -8, 2.5], ['#453527', -5, 7, 3],
+    ['#1e1e1e', 9, 5, 2], ['#3d2f24', 0, -1, 2.5], ['#2a2a2a', -3, -10, 2],
+    ['#453527', 10, -2, 2], ['#242424', -10, 3, 2.5], ['#3d2f24', 4, 9, 2],
+  ];
+  function drawDebrisHex(p) {
     hexPathAt(p);
     ctx.fillStyle = '#5c4a3a';
     ctx.fill();
-    ctx.fillStyle = 'rgba(90,80,70,0.6)';
-    DEBRIS_ROCK_OFFSETS.forEach(([dx, dy]) => {
+    DEBRIS_SPECKLES.forEach(([color, dx, dy, r]) => {
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(p.x + dx, p.y + dy, 3, 0, Math.PI * 2);
+      ctx.arc(p.x + dx, p.y + dy, r, 0, Math.PI * 2);
       ctx.fill();
     });
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.strokeStyle = '#8a8a90';
-    ctx.fillStyle = '#3a3a40';
-    ctx.lineWidth = 2;
-    if (detail === 'sword') {
-      ctx.beginPath();
-      ctx.moveTo(-10, 10);
-      ctx.lineTo(8, -10);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(1, -3);
-      ctx.lineTo(5, 1);
-      ctx.stroke();
-    } else if (detail === 'shield') {
-      ctx.beginPath();
-      ctx.ellipse(0, 2, 8, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else if (detail === 'barrel') {
-      ctx.beginPath();
-      ctx.rect(-7, -8, 14, 16);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-7, -3); ctx.lineTo(7, -3);
-      ctx.moveTo(-7, 3); ctx.lineTo(7, 3);
-      ctx.stroke();
-    }
-    ctx.restore();
     hexPathAt(p);
     ctx.strokeStyle = 'rgba(0,0,0,0.5)';
     ctx.lineWidth = 1.5;
@@ -3608,14 +3657,62 @@
     ctx.stroke();
   }
 
+  // Ruins — a top-down ruined-wall tile: a broken-stone floor (rubble speckles, same fixed-per-
+  // hex treatment as Debris) with thick wall-stub segments drawn along whichever of its 6 edges
+  // border ANOTHER Ruins hex, so a cluster of adjacent Ruins reads as one continuous wall rather
+  // than separate disconnected tiles — per Nate's explicit ask. Found geometrically rather than
+  // via a direction-index lookup: this hex grid's row/idx neighbor rule doesn't map cleanly onto
+  // hexPathAt's fixed angle scheme (columns alternate 7/6 tall), but real pixel positions do — for
+  // each Ruins neighbor, the two of THIS hex's 6 vertices closest to that neighbor's center are
+  // exactly the two endpoints of the edge shared between them. Both hexes on either side of a
+  // shared edge independently draw the same segment; harmless (identical coordinates painted
+  // twice), and guarantees the connector appears regardless of which of the two happens to be
+  // rendered "first" in terrainFeatures.
+  const RUINS_RUBBLE_OFFSETS = [[-8, -6, 2.5], [6, -9, 2], [-4, 8, 2], [10, 3, 2], [0, -2, 1.5]];
+  function drawRuinsHex(p, hex, ruinsKeys) {
+    hexPathAt(p);
+    ctx.fillStyle = '#6b6558';
+    ctx.fill();
+    ctx.fillStyle = 'rgba(58,54,47,0.6)';
+    RUINS_RUBBLE_OFFSETS.forEach(([dx, dy, r]) => {
+      ctx.beginPath();
+      ctx.arc(p.x + dx, p.y + dy, r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    const verts = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 180) * 60 * i;
+      verts.push({ x: p.x + HEX_RADIUS * Math.cos(angle), y: p.y + HEX_RADIUS * Math.sin(angle) });
+    }
+    ctx.strokeStyle = '#3d3a35';
+    ctx.lineWidth = 7;
+    ctx.lineCap = 'round';
+    neighborsOf(hex.row, hex.idx).forEach(n => {
+      if (!ruinsKeys.has(hexKey(n.row, n.idx))) return;
+      const np = hexPixelPos(n.row, n.idx);
+      const [v1, v2] = verts.slice().sort((a, b) =>
+        Math.hypot(a.x - np.x, a.y - np.y) - Math.hypot(b.x - np.x, b.y - np.y));
+      ctx.beginPath();
+      ctx.moveTo(v1.x, v1.y);
+      ctx.lineTo(v2.x, v2.y);
+      ctx.stroke();
+    });
+    hexPathAt(p);
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
   function drawTerrainFeatures() {
     if (!terrainFeatures.length) return;
     ctx.save();
+    const ruinsKeys = new Set(terrainFeatures.filter(f => f.type === 'ruins').map(f => hexKey(f.hex.row, f.hex.idx)));
     terrainFeatures.forEach(f => {
       const p = hexPixelPos(f.hex.row, f.hex.idx);
       if (f.type === 'chasm') drawChasmHex(p);
-      else if (f.type === 'debris') drawDebrisHex(p, f.detail);
+      else if (f.type === 'debris') drawDebrisHex(p);
       else if (f.type === 'fogpatch') drawFogPatchHex(p);
+      else if (f.type === 'ruins') drawRuinsHex(p, f.hex, ruinsKeys);
     });
     ctx.restore();
   }
@@ -3960,7 +4057,7 @@
   // descriptions) — they're offensive abilities, not terrain, and this function never touches
   // hero.hp/hero-only state to enforce that; it only ever reports what's true of the hex itself.
   function terrainAt(hex) {
-    const t = { blocksMovement: false, blocksLOS: false, speedMult: 1, blocksAttack: false, atkSpeedMult: 1 };
+    const t = { blocksMovement: false, blocksLOS: false, speedMult: 1, blocksAttack: false, atkSpeedMult: 1, rangeCap: Infinity };
     if (iceWallHexes.some(h => h.row === hex.row && h.idx === hex.idx)) {
       t.blocksMovement = true;
       t.blocksLOS = true;
@@ -3983,8 +4080,21 @@
       if (def.blocksLOS) t.blocksLOS = true;
       if (def.speedMult !== undefined) t.speedMult = Math.min(t.speedMult, def.speedMult);
       if (def.atkSpeedMult !== undefined) t.atkSpeedMult = Math.min(t.atkSpeedMult, def.atkSpeedMult);
+      if (def.rangeCap !== undefined) t.rangeCap = Math.min(t.rangeCap, def.rangeCap);
     }
     return t;
+  }
+
+  // Standing in Fog impairs whoever's IN it (hero or enemy alike — every terrain effect in this
+  // game is symmetric), independent of the existing hexesBetween LOS check for fog sitting
+  // between two hexes. Nate reported standing in fog and still sniping normally with a Crossbow
+  // — hasLineOfSight only ever checked hexes STRICTLY between attacker and target (see
+  // hexesBetween's d<=1 short-circuit), never either endpoint, so fog at the attacker's OWN hex
+  // was never actually checked anywhere. Routed through terrainAt's rangeCap axis (Math.min, same
+  // pattern as speedMult/atkSpeedMult) rather than a fog-specific check, so a future terrain type
+  // that caps range differently composes for free with anything else that does too.
+  function effectiveAtkRange(fromHex, baseRange) {
+    return Math.min(baseRange, terrainAt(fromHex).rangeCap);
   }
 
   // Every hex that currently blocks movement — used to seed the `occupied` set in both movement
@@ -4044,29 +4154,28 @@
     const chosen = eligible.slice(0, targetCount);
 
     const features = [];
-    const chasmSoFar = [];
+    const blockingSoFar = [];
     chosen.forEach(hex => {
       const typeId = TERRAIN_TYPE_IDS[Math.floor(Math.random() * TERRAIN_TYPE_IDS.length)];
       if (TERRAIN_TYPES[typeId].blocksMovement) {
         // Checked against every OTHER hex on the board, not just current enemy positions — a
-        // candidate Chasm hex that would seal off some currently-empty hex into its own isolated
-        // pocket is rejected here too, even though nothing occupies that pocket yet. Nate hit
+        // candidate blocking hex (Chasm or Ruins) that would seal off some currently-empty hex
+        // into its own isolated pocket is rejected here too, even though nothing occupies that
+        // pocket yet. Nate hit
         // exactly this: an empty hex got fully ringed by Chasm, nothing caught it at generation
         // time (the old check only verified enemies stayed reachable), and he was later able to
         // click-relocate the hero straight into the sealed pocket during prep — an unwinnable
         // softlock once combat started, since neither side could ever reach the other.
-        const candidateBlocked = [...chasmSoFar, hex];
+        const candidateBlocked = [...blockingSoFar, hex];
         const blockedSet = new Set(candidateBlocked.map(h => hexKey(h.row, h.idx)));
         const reachTargets = allHexes().filter(h => !blockedSet.has(hexKey(h.row, h.idx)));
         if (keepsBoardConnected(heroHex, reachTargets, candidateBlocked)) {
-          chasmSoFar.push(hex);
+          blockingSoFar.push(hex);
           features.push({ hex, type: typeId });
         } else {
           const fallback = ['fogpatch', 'debris'][Math.floor(Math.random() * 2)];
           features.push({ hex, type: fallback });
         }
-      } else if (typeId === 'debris') {
-        features.push({ hex, type: typeId, detail: DEBRIS_DETAILS[Math.floor(Math.random() * DEBRIS_DETAILS.length)] });
       } else {
         features.push({ hex, type: typeId });
       }
@@ -4177,20 +4286,25 @@
     // a wall to occupy — see hexesBetween's d<=1 short-circuit).
     movable
       .map(e => ({ e, dist: hexDistance(e.hex, target) }))
-      .filter(({ e, dist }) => dist > ROLE_RANGE[e.role] || !hasLineOfSight(e.hex, target))
+      .filter(({ e, dist }) => dist > effectiveAtkRange(e.hex, ROLE_RANGE[e.role]) || !hasLineOfSight(e.hex, target))
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
       .forEach(({ e }) => {
         if (!advanceMoveProgress(e, terrainAt(e.hex), simDt)) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
         const losCheck = n => hasLineOfSight(n, target);
         const isSmart = ENEMY_TYPES[e.typeId] && ENEMY_TYPES[e.typeId].smart;
+        // Range used for "how close is close enough" has to reflect the SAME fog-capped range
+        // the actual attack-eligibility check in simulationStep uses, or a fogged-in unit would
+        // decide it's "close enough" at its full role range and just stand there, never actually
+        // attacking and never closing the last distance either.
+        const moveRange = effectiveAtkRange(e.hex, ROLE_RANGE[e.role]);
         // Smart units first try to reach TRUE range while avoiding Debris (allowFallback:false —
         // a fallback hit there would just be "closest reachable hex while avoiding debris," which
         // could easily be a worse detour than simply walking through it, so it must not count as
         // success). Only if that strict attempt fails do they fall through to the exact same call
         // every other unit uses — true range if reachable, else the closest-reachable-hex fallback
         // (Nate's melee-chokepoint fix) — which is perfectly happy to walk straight through Debris.
-        const step = (isSmart && findStepToward(e.hex, target, ROLE_RANGE[e.role], debrisAvoidingOccupied, losCheck, false))
-          || findStepToward(e.hex, target, ROLE_RANGE[e.role], occupied, losCheck);
+        const step = (isSmart && findStepToward(e.hex, target, moveRange, debrisAvoidingOccupied, losCheck, false))
+          || findStepToward(e.hex, target, moveRange, occupied, losCheck);
         if (step) {
           occupied.delete(hexKey(e.hex.row, e.hex.idx));
           debrisAvoidingOccupied.delete(hexKey(e.hex.row, e.hex.idx));
@@ -4209,12 +4323,13 @@
     const target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
-    if (hexDistance(heroHex, target.hex) <= s.atkRange && hasLineOfSight(heroHex, target.hex)) return;
+    const heroRange = effectiveAtkRange(heroHex, s.atkRange); // e.g. Fog Patch caps this to 1, regardless of weapon
+    if (hexDistance(heroHex, target.hex) <= heroRange && hasLineOfSight(heroHex, target.hex)) return;
     // Terrain is symmetric — Debris slows the hero's own approach exactly like it slows enemies.
     if (!advanceMoveProgress(hero, terrainAt(heroHex), simDt)) return;
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
     terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through blocking terrain either
-    const step = findStepToward(heroHex, target.hex, s.atkRange, occupied, n => hasLineOfSight(n, target.hex));
+    const step = findStepToward(heroHex, target.hex, heroRange, occupied, n => hasLineOfSight(n, target.hex));
     if (step) heroHex = step;
   }
 
@@ -4244,22 +4359,36 @@
   }
 
   function handleSetupPlacementClick(hex) {
-    if (!isHexFreeForSetup(hex)) return;
+    if (!isHexFreeForSetup(hex)) {
+      setSetupPlacementError('That hex is occupied or blocked — pick an open one.');
+      return;
+    }
     if (placingSetupId === 'beartrap') {
       beartrapHex = hex;
       placingSetupId = null;
+      setupPlacementError = null;
       log('Bear Trap set.', 'wave');
       renderAll();
       return;
     }
     if (placingSetupId === 'icewall') {
-      if (pendingWallHexes.some(h => h.row === hex.row && h.idx === hex.idx)) return;
-      if (pendingWallHexes.length >= 3) return;
+      if (pendingWallHexes.some(h => h.row === hex.row && h.idx === hex.idx)) {
+        setSetupPlacementError('That hex is already part of your wall.');
+        return;
+      }
+      if (pendingWallHexes.length >= 3) {
+        setSetupPlacementError('Ice Wall can only cover up to 3 hexes.');
+        return;
+      }
       // The first hex is free; every hex after that must touch (be hex-adjacent to) at least
       // one already-selected hex — that's what lets a straight line, an L-bend, or a compact
       // 3-hex triangle all count as "connected," while a hex off on its own doesn't.
-      if (pendingWallHexes.length > 0 && !pendingWallHexes.some(h => hexDistance(h, hex) === 1)) return;
+      if (pendingWallHexes.length > 0 && !pendingWallHexes.some(h => hexDistance(h, hex) === 1)) {
+        setSetupPlacementError('Each new hex must touch one you already placed.');
+        return;
+      }
       pendingWallHexes.push(hex);
+      setupPlacementError = null;
       renderAll();
     }
   }
@@ -4337,7 +4466,7 @@
     // Same "only accumulate attack progress while actually in range" rule enemies use — the
     // hero doesn't get a burst of pent-up attacks the instant it closes the distance either.
     const heroTarget = currentHeroTarget();
-    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= s.atkRange && hasLineOfSight(heroHex, heroTarget.hex)) {
+    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= effectiveAtkRange(heroHex, s.atkRange) && hasLineOfSight(heroHex, heroTarget.hex)) {
       hero.atkTimer += simDt * terrainAt(heroHex).atkSpeedMult; // e.g. Debris slows the hero's own attacks too
       const heroInterval = 1 / s.atkSpeed;
       while (hero.atkTimer >= heroInterval && phase === 'combat' && queue.length) {
@@ -4371,7 +4500,7 @@
       if (phase !== 'combat' || !queue.includes(enemy)) return;
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
       if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
-      if (hexDistance(enemy.hex, enemyTarget) > ROLE_RANGE[enemy.role]) return;
+      if (hexDistance(enemy.hex, enemyTarget) > effectiveAtkRange(enemy.hex, ROLE_RANGE[enemy.role])) return; // e.g. fogged — capped to melee regardless of role
       if (!hasLineOfSight(enemy.hex, enemyTarget)) return; // e.g. Ice Wall blocks the shot, not just adjacency
       enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult; // e.g. Debris slows attacks too, not just movement
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
@@ -4428,7 +4557,7 @@
     effects = [];
     const s = computeStats();
     hero.hp = s.maxHP;
-    gold = 0;
+    gold = 10; // a little starting cash so the very first shop visit isn't a hard skip
     shopFrozenNext = false;
     document.getElementById('log').innerHTML = '';
     document.getElementById('gameOverModal').classList.add('hidden');
