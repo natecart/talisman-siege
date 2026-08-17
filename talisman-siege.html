@@ -294,6 +294,9 @@
   .talismanCard .icon { font-size: 26px; margin-bottom: 6px; }
   .talismanCard .name { font-size: 14px; font-weight: 600; color: #d9b8f5; margin-bottom: 6px; }
   .talismanCard .desc { font-size: 12px; color: #aaa; line-height: 1.4; }
+  /* Compact synergy summary (see talismanTagsLine) — quieter than .desc since it's supplementary
+     info, not the talisman's core effect. Only rendered when at least one tag applies. */
+  .talismanCard .talismanTags { font-size: 10.5px; color: #6b8fb0; margin-top: 5px; font-style: italic; }
   #gameOverModal .modalBox { text-align: center; }
   #gameOverModal .bigStat { font-size: 34px; color: #fff; font-weight: 700; margin: 6px 0 2px; }
   #gameOverModal .bestLine { color: #888; font-size: 13px; margin-bottom: 18px; }
@@ -624,9 +627,14 @@
   // grants nothing itself (0%, `maxLevel: 1`) beyond flipping `unlocksStat` on, which in turn
   // opens up a capped (`maxLevel: 5`) repeatable growth item that carries the entire bonus,
   // plain additive — never compounding, and never split across the unlock + the growth item.
+  // Extended (not just reused) by the talisman synergy taxonomy below (see talismanTooltip/
+  // talismanTagsLine) — dmg/maxHP/atkSpeed/gold/cooldownReduction/armor are the shared
+  // computeStats() keys those helpers label, added here rather than as a second same-named
+  // constant so there's exactly one source of "how do we display this stat key" in the file.
   const STAT_LABELS = {
     critChance: 'Crit Chance', regen: 'HP Regen', lifesteal: 'Lifesteal', thorns: 'Thorns', dodge: 'Dodge Chance',
     damageReduction: 'Damage Reduction', atkSpeedScaling: 'Attack Speed Scaling',
+    dmg: 'Damage', maxHP: 'Max HP', atkSpeed: 'Attack Speed', gold: 'Gold', cooldownReduction: 'Cooldown Reduction', armor: 'Armor',
   };
 
   const UPGRADES = [
@@ -686,34 +694,118 @@
   // Minor talismans are numeric/utility tweaks, offered after wave 3 of every arc.
   // Major talismans are build-defining — either an always-on passive or an independent
   // cooldown "ability" (see ABILITY_CFG) — one opens every run, then another follows every boss.
+  // Every talisman now also declares its place in the synergy taxonomy worked out with Nate:
+  // - triggerType: passive (always-on) / onhit (fires off damage YOU deal, universal) /
+  //   proc (chance/condition checked on your own action) / reactive (chance/condition checked
+  //   on an INCOMING attack) / growth (accumulates permanently via a stack counter) /
+  //   ability (own cooldown, see ABILITY_CFG) / setup (placed pre-fight, see SETUP_TALISMAN_IDS).
+  //   Distinct from the pre-existing `type` field, which is load-bearing game logic (drives the
+  //   Abilities-panel/Setup-Abilities-panel dispatch) — triggerType is purely the richer
+  //   descriptive taxonomy layered on top, never read by combat code.
+  // - modifies: shared stat(s) this talisman contributes TO (a "source" — other talismans that
+  //   scalesWith the same key automatically benefit, no per-pair wiring needed).
+  // - scalesWith: shared stat(s) this talisman's OWN magnitude is computed FROM (a "consumer" —
+  //   whatever else modifies that same key makes this one hit harder/heal more/etc.).
+  // - frequencyGate: 'cooldown' if Quickening's cooldownReduction makes this fire more often,
+  //   'attackSpeed' if attack-speed talismans (Momentum, weapons) do — independent of
+  //   scalesWith, since e.g. Overcharge's OUTPUT scales with dmg but its RATE scales with
+  //   attack speed instead.
+  // Thorns is a deliberate outlier: scalesWith armor/damage-reduction, but INVERSELY — more
+  // mitigation means less incoming damage left for Thorns to reflect. Left as a plain scalesWith
+  // tag rather than inventing a signed/inverse schema for one entry; noted here instead.
   const TALISMANS = [
-    { id: 'bloodthirst', tier: 'minor', icon: '\u{1F489}', name: 'Bloodthirst',   desc: 'Heal for 10% of damage dealt.', unlocksStat: 'lifesteal' },
-    { id: 'momentum',    tier: 'minor', icon: '\u{1F3C3}', name: 'Momentum',      desc: 'Attack speed +2% per wave cleared, stacking up to +40%.' },
-    { id: 'bountyhunter', tier: 'minor', icon: '\u{1FA99}', name: 'Bounty Hunter', desc: '+2 gold per kill.' },
-    { id: 'thickhide',   tier: 'minor', icon: '\u{1F6E1}', name: 'Thick Hide',    desc: '+40% max HP, -15% damage dealt.' },
-    { id: 'glasscannon', tier: 'minor', icon: '\u{1F4A5}', name: 'Glass Cannon',  desc: '+40% damage, -25% max HP.' },
-    { id: 'regen',       tier: 'minor', icon: '\u{2764}',  name: 'Regeneration',  desc: 'Regen 2.5% of max HP per second.', unlocksStat: 'regen' },
-    { id: 'thorns',      tier: 'minor', icon: '\u{1F332}', name: 'Thorns',        desc: 'Reflect 25% of damage taken back at the attacker.', unlocksStat: 'thorns' },
-    { id: 'luckycharm',  tier: 'minor', icon: '\u{1F340}', name: 'Lucky Charm',   desc: '12% chance to fully dodge an attack.', unlocksStat: 'dodge' },
-    { id: 'adrenaline',  tier: 'minor', icon: '\u{1F525}', name: 'Adrenaline',    desc: '+1% damage per 2% missing HP (cap +40%).' },
-    { id: 'killerinstinct', tier: 'minor', icon: '\u{1F3AF}', name: 'Killer Instinct', desc: '20% Crit Chance. Crits always deal double damage.', unlocksStat: 'critChance' },
-    { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+20% Damage.' },
-    { id: 'ironvitality', tier: 'minor', icon: '\u{1F49A}', name: 'Iron Vitality', desc: '+25% Max HP.' },
-    { id: 'quickening',  tier: 'minor', icon: '\u{23F1}\u{FE0F}', name: 'Quickening', desc: '-20% to all ability cooldowns.' },
-    { id: 'smokescreen', tier: 'minor', type: 'ability', icon: '\u{1F32B}\u{FE0F}', name: 'Smoke Screen', desc: `Every ${ABILITY_CFG.smokescreen.cooldown}s, blind the furthest enemy's patch of 4 hexes for ${SMOKE_DURATION}s — enemies inside move at ${Math.round(SMOKE_SLOW_MULT * 100)}% speed and can't attack until they step out. Affects enemies only — unlike terrain, it never slows or blinds you.` },
-    { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP.' },
-    { id: 'overcharge',  tier: 'major', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.' },
-    { id: 'executioner', tier: 'major', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.' },
-    { id: 'goldentouch', tier: 'major', icon: '\u{1F4B0}', name: 'Golden Touch',  desc: '+30% gold earned, from kills and from combat rewards alike.' },
-    { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage.` },
-    { id: 'electricshock', tier: 'major', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack jolts your target for bonus damage, arcing to every enemy adjacent to it too.' },
-    { id: 'afterimage', tier: 'major', type: 'ability', icon: '\u{1F465}', name: 'After Image', desc: `Every ${ABILITY_CFG.afterimage.cooldown}s, swap places with a decoy sent to the safest hex 4 tiles out. The decoy has 20% of your max HP and draws enemy attacks in your place.` },
-    { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 2 hexes, stunning enemies for 1s/0.5s the closer they are.` },
-    { id: 'icewall',     tier: 'major', type: 'setup', icon: '\u{2744}\u{FE0F}', name: 'Ice Wall', desc: 'Before the fight, place up to 3 connected hexes of impassable ice — enemies (and you) must path around them for the whole fight.' },
-    { id: 'beartrap',    tier: 'minor', type: 'setup', icon: '\u{1FAA4}', name: 'Bear Trap', desc: 'Before the fight, place 1 hex. The first enemy to step on it takes a heavy hit and is rooted for 2s, then it’s spent. Affects enemies only — you can walk over it freely.' },
+    { id: 'bloodthirst', tier: 'minor', icon: '\u{1F489}', name: 'Bloodthirst',   desc: 'Heal for 10% of damage dealt.', unlocksStat: 'lifesteal',
+      triggerType: 'onhit', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
+    { id: 'momentum',    tier: 'minor', icon: '\u{1F3C3}', name: 'Momentum',      desc: 'Attack speed +2% per wave cleared, stacking up to +40%.',
+      triggerType: 'growth', modifies: ['atkSpeed'] },
+    { id: 'bountyhunter', tier: 'minor', icon: '\u{1FA99}', name: 'Bounty Hunter', desc: '+2 gold per kill.',
+      triggerType: 'proc', scalesWith: ['gold'] },
+    { id: 'thickhide',   tier: 'minor', icon: '\u{1F6E1}', name: 'Thick Hide',    desc: '+40% max HP, -20% attack speed.',
+      triggerType: 'passive', modifies: ['maxHP', 'atkSpeed'] },
+    { id: 'glasscannon', tier: 'minor', icon: '\u{1F4A5}', name: 'Glass Cannon',  desc: '+40% damage, -25% max HP.',
+      triggerType: 'passive', modifies: ['dmg', 'maxHP'] },
+    { id: 'regen',       tier: 'major', icon: '\u{2764}',  name: 'Regeneration',  desc: 'Regen 2.5% of max HP per second.', unlocksStat: 'regen',
+      triggerType: 'passive', scalesWith: ['maxHP'] },
+    { id: 'thorns',      tier: 'minor', icon: '\u{1F332}', name: 'Thorns',        desc: 'Reflect 25% of damage taken back at the attacker.', unlocksStat: 'thorns',
+      triggerType: 'reactive', scalesWith: ['armor'] },
+    { id: 'luckycharm',  tier: 'minor', icon: '\u{1F340}', name: 'Lucky Charm',   desc: '12% chance to fully dodge an attack.', unlocksStat: 'dodge',
+      triggerType: 'reactive' },
+    { id: 'adrenaline',  tier: 'minor', icon: '\u{1F525}', name: 'Adrenaline',    desc: '+1% damage per 2% missing HP (cap +40%).',
+      triggerType: 'passive', modifies: ['dmg'], scalesWith: ['maxHP'] },
+    { id: 'killerinstinct', tier: 'minor', icon: '\u{1F3AF}', name: 'Killer Instinct', desc: '20% Crit Chance. Crits always deal double damage.', unlocksStat: 'critChance',
+      triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
+    { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+20% Damage.',
+      triggerType: 'passive', modifies: ['dmg'] },
+    { id: 'ironvitality', tier: 'minor', icon: '\u{1F49A}', name: 'Iron Vitality', desc: '+25% Max HP.',
+      triggerType: 'passive', modifies: ['maxHP'] },
+    { id: 'quickening',  tier: 'minor', icon: '\u{23F1}\u{FE0F}', name: 'Quickening', desc: '-20% to all ability cooldowns.',
+      triggerType: 'passive', modifies: ['cooldownReduction'] },
+    { id: 'smokescreen', tier: 'minor', type: 'ability', icon: '\u{1F32B}\u{FE0F}', name: 'Smoke Screen', desc: `Every ${ABILITY_CFG.smokescreen.cooldown}s, blind the furthest enemy's patch of 4 hexes for ${SMOKE_DURATION}s — enemies inside move at ${Math.round(SMOKE_SLOW_MULT * 100)}% speed and can't attack until they step out. Affects enemies only — unlike terrain, it never slows or blinds you.`,
+      triggerType: 'ability', frequencyGate: 'cooldown' },
+    { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP.',
+      triggerType: 'reactive', scalesWith: ['maxHP'] },
+    { id: 'overcharge',  tier: 'minor', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.',
+      triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
+    { id: 'executioner', tier: 'minor', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.',
+      triggerType: 'proc', frequencyGate: 'attackSpeed' },
+    { id: 'goldentouch', tier: 'major', icon: '\u{1F4B0}', name: 'Golden Touch',  desc: '+30% gold earned, from kills and from combat rewards alike.',
+      triggerType: 'passive', modifies: ['gold'] },
+    { id: 'cleave',      tier: 'major', type: 'ability', icon: '\u{1FA93}', name: 'Cleave', desc: `Every ${ABILITY_CFG.cleave.cooldown}s, strike your target's hex and the two hexes flanking it for full damage.`,
+      triggerType: 'ability', scalesWith: ['dmg'], frequencyGate: 'cooldown' },
+    { id: 'electricshock', tier: 'minor', icon: '\u{1F329}\u{FE0F}', name: 'Electric Shock', desc: 'Every 4th attack jolts your target for bonus damage, arcing to every enemy adjacent to it too.',
+      triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
+    { id: 'afterimage', tier: 'major', type: 'ability', icon: '\u{1F465}', name: 'After Image', desc: `Every ${ABILITY_CFG.afterimage.cooldown}s, swap places with a decoy sent to the safest hex 4 tiles out. The decoy has 20% of your max HP and draws enemy attacks in your place.`,
+      triggerType: 'ability', scalesWith: ['maxHP'], frequencyGate: 'cooldown' },
+    { id: 'shockwave',   tier: 'major', type: 'ability', icon: '\u{1F300}', name: 'Shockwave', desc: `Every ${ABILITY_CFG.shockwave.cooldown}s, ripple out 2 hexes, stunning enemies for 1s/0.5s the closer they are.`,
+      triggerType: 'ability', frequencyGate: 'cooldown' },
+    { id: 'icewall',     tier: 'major', type: 'setup', icon: '\u{2744}\u{FE0F}', name: 'Ice Wall', desc: 'Before the fight, place up to 3 connected hexes of impassable ice — enemies (and you) must path around them for the whole fight.',
+      triggerType: 'setup' },
+    { id: 'beartrap',    tier: 'minor', type: 'setup', icon: '\u{1FAA4}', name: 'Bear Trap', desc: 'Before the fight, place 1 hex. The first enemy to step on it takes a heavy hit and is rooted for 2s, then it’s spent. Affects enemies only — you can walk over it freely.',
+      triggerType: 'setup', scalesWith: ['dmg'] },
   ];
 
   const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
+
+  // Momentum's live stack count + the attack-speed bonus it's currently granting — Nate's ask
+  // was to make this visible, not just knowable by doing the math yourself. Reads
+  // hero.talismanStacks directly (see freshHero/waveCleared/removeTalismanFromOwnership) rather
+  // than re-deriving it, so this always matches whatever computeStats() actually applies.
+  function momentumStackSummary() {
+    const stacks = hero.talismanStacks.momentum || 0;
+    const bonusPct = Math.round(Math.min(0.40, 0.02 * stacks) * 100);
+    return `${stacks} stack${stacks === 1 ? '' : 's'} — +${bonusPct}% attack speed`;
+  }
+
+  // Chip label text everywhere a talisman chip is rendered — plain "icon name" for everything
+  // except Momentum, which appends its live stack summary so progress reads at a glance instead
+  // of needing a hover.
+  function talismanChipLabel(t) {
+    return t.id === 'momentum' ? `${t.icon} ${t.name} (${momentumStackSummary()})` : `${t.icon} ${t.name}`;
+  }
+
+  // Multi-line native tooltip — full stat labels, one relationship per line, appended after the
+  // talisman's own desc. Used everywhere a chip only shows on hover (Loadout slots/bag, Setup
+  // Abilities panel).
+  function talismanTooltip(t) {
+    const lines = [t.desc];
+    if (t.modifies && t.modifies.length) lines.push('Boosts: ' + t.modifies.map(k => STAT_LABELS[k] || k).join(', '));
+    if (t.scalesWith && t.scalesWith.length) lines.push('Scales with: ' + t.scalesWith.map(k => STAT_LABELS[k] || k).join(', '));
+    if (t.frequencyGate) lines.push('Fires more often with: ' + (t.frequencyGate === 'cooldown' ? 'Cooldown Reduction' : 'Attack Speed'));
+    if (t.id === 'momentum') lines.push(momentumStackSummary());
+    return lines.join('\n');
+  }
+
+  // Compact one-line version for talisman CARDS (reward modal, Spellweaver, Shrine) where the
+  // description is already shown as visible text rather than hidden behind a hover — same
+  // underlying tags, just condensed to fit under a card without wrapping every synergy onto its
+  // own line.
+  function talismanTagsLine(t) {
+    const parts = [];
+    if (t.modifies && t.modifies.length) parts.push('Boosts ' + t.modifies.map(k => STAT_LABELS[k] || k).join('/'));
+    if (t.scalesWith && t.scalesWith.length) parts.push('Scales w/ ' + t.scalesWith.map(k => STAT_LABELS[k] || k).join('/'));
+    if (t.frequencyGate) parts.push('Freq: ' + (t.frequencyGate === 'cooldown' ? 'Cooldown' : 'Atk Speed'));
+    return parts.join(' · ');
+  }
 
   // ---------------- Data: hero weapons ----------------
   // Independent of talismans — the hero owns all three from the start (see freshHero) and
@@ -1271,7 +1363,13 @@
       equipped: { major: [], minor: [] }, // only these actually affect stats/combat — see isEquipped
       weapons: { sword: { level: 1 }, spear: { level: 1 }, crossbow: { level: 1 } }, // owned from the start — see HERO_WEAPONS
       equippedWeapon: 'sword', // drives atkRange (see computeStats) and the hero's own drawn weapon shape (see HERO_WEAPON_VISUALS)
-      attackCount: 0, atkTimer: 0, cooldowns: {}, momentumStacks: 0, secondWindUsedThisWave: false,
+      attackCount: 0, atkTimer: 0, cooldowns: {}, secondWindUsedThisWave: false,
+      // Per-talisman-id permanent stack counters (Momentum's growth, and any future "Growth"
+      // trigger-type talisman) — deliberately keyed on OWNERSHIP (talismanBag), not equip state,
+      // so unequipping and re-equipping never resets progress; only actually losing the talisman
+      // (see removeTalismanFromOwnership) resets its entry. Lives on the hero, not on the
+      // TALISMANS data definition, since it's per-run player progress, not static config.
+      talismanStacks: {},
       moveSpeed: HERO_MOVE_SPEED, moveProgress: 0, // hexes/second — see resolveHeroMovement/advanceMoveProgress
       restBuffFightsRemaining: 0, // Wanderer's Inn "Rest" — see computeStats and waveCleared
       poisonStacks: 0, plaguedDmgRef: 0, // Plagued affix — see enemyAttack and simulationStep, reset each fight
@@ -1362,7 +1460,7 @@
     // Everything below stays at true zero until a talisman grants it — no shop path at all.
     let critChance = 0, regen = 0, dodgeChance = 0, thornsPct = 0, lifestealPct = 0;
 
-    if (has('thickhide')) { maxHP *= 1.40; dmg *= 0.85; }
+    if (has('thickhide')) { maxHP *= 1.40; atkSpeed *= 0.80; }
     if (has('glasscannon')) { dmg *= 1.40; maxHP *= 0.75; }
     if (has('goldentouch')) goldMult *= 1.3;
     if (has('bountyhunter')) bonusGoldPerKill += 2;
@@ -1374,7 +1472,7 @@
     if (has('killerinstinct')) critChance += 0.20;
     if (has('battlefury')) dmg *= 1.20;
     if (has('ironvitality')) maxHP *= 1.25;
-    if (has('momentum')) atkSpeed *= (1 + Math.min(0.40, 0.02 * hero.momentumStacks));
+    if (has('momentum')) atkSpeed *= (1 + Math.min(0.40, 0.02 * (hero.talismanStacks.momentum || 0)));
     if (has('adrenaline')) {
       const missingPct = 1 - hero.hp / maxHP;
       dmg *= (1 + Math.min(0.4, missingPct / 2));
@@ -2065,7 +2163,12 @@
         log(`Floor ${floor} boss defeated! (+${bossBonus}g bonus)`, 'wave');
       }
 
-      hero.momentumStacks++;
+      // Only accumulates while Momentum is actually owned (bag OR equipped — see
+      // removeTalismanFromOwnership for the only thing that resets this), not unconditionally
+      // every wave-clear regardless of whether you've ever picked it up.
+      if (hero.talismanBag.includes('momentum')) {
+        hero.talismanStacks.momentum = (hero.talismanStacks.momentum || 0) + 1;
+      }
       hero.secondWindUsedThisWave = false;
       if (hero.restBuffFightsRemaining > 0) hero.restBuffFightsRemaining--;
       wave = clearedDepth + 1;
@@ -2277,13 +2380,24 @@
   // 50/50 between a different random talisman (a dupe converts to essence, same as every
   // other talisman pickup) or a flat 25-100g — see the design discussion for why the "worth
   // 50-200% of what you gave" goal is being punted on a real value formula for now.
+  // The only place a talisman actually leaves your possession today (the Shrine's sacrifice),
+  // routed through one shared helper rather than inlining the bag/equipped removal here — any
+  // future disposal path (a vendor sell, a discard button, whatever) should call this too, so
+  // stack counters (see hero.talismanStacks / Momentum) always reset on the way out instead of
+  // needing that reset re-added by hand at every new call site. Sell it, rebuy it, stacks are
+  // gone — there's no way to bank Growth-type progress through a sale.
+  function removeTalismanFromOwnership(id) {
+    hero.talismanBag = hero.talismanBag.filter(x => x !== id);
+    hero.equipped.major = hero.equipped.major.filter(x => x !== id);
+    hero.equipped.minor = hero.equipped.minor.filter(x => x !== id);
+    delete hero.talismanStacks[id];
+  }
+
   function sacrificeTalisman(id) {
     if (phase !== 'roomVisit' || roomState.step !== 'pick') return;
     const t = TALISMANS.find(x => x.id === id);
     if (!t || !hero.talismanBag.includes(id)) return;
-    hero.talismanBag = hero.talismanBag.filter(x => x !== id);
-    hero.equipped.major = hero.equipped.major.filter(x => x !== id);
-    hero.equipped.minor = hero.equipped.minor.filter(x => x !== id);
+    removeTalismanFromOwnership(id);
 
     let giftText;
     if (Math.random() < 0.5) {
@@ -2357,7 +2471,7 @@
       card.className = 'talismanCard tier-' + t.tier + (pick.duplicate ? ' duplicate' : '');
       card.innerHTML = pick.duplicate
         ? `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">Already owned — convert to <b>+${reward} essence</b> instead.</div>`
-        : `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>`;
+        : `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>${talismanTagsLine(t) ? `<div class="talismanTags">${talismanTagsLine(t)}</div>` : ''}`;
       card.addEventListener('click', () => {
         if (pick.duplicate) {
           legacy.essence += reward;
@@ -2685,8 +2799,8 @@
 
       const label = document.createElement('div');
       label.className = 'setupAbilityName';
-      label.title = t.desc;
-      label.textContent = `${t.icon} ${t.name}`;
+      label.title = talismanTooltip(t);
+      label.textContent = talismanChipLabel(t);
       row.appendChild(label);
 
       const controls = document.createElement('div');
@@ -2888,8 +3002,8 @@
         if (id) {
           const t = TALISMANS.find(x => x.id === id);
           chip.className = 'talismanChip slotChip tier-' + t.tier;
-          chip.title = t.desc;
-          chip.textContent = `${t.icon} ${t.name}`;
+          chip.title = talismanTooltip(t);
+          chip.textContent = talismanChipLabel(t);
           chip.addEventListener('click', () => unequipTalisman(id));
         } else {
           chip.className = 'talismanChip slotChip emptySlot';
@@ -2914,8 +3028,8 @@
         const t = TALISMANS.find(x => x.id === id);
         const chip = document.createElement('span');
         chip.className = 'talismanChip slotChip tier-' + t.tier;
-        chip.title = t.desc;
-        chip.textContent = `${t.icon} ${t.name}`;
+        chip.title = talismanTooltip(t);
+        chip.textContent = talismanChipLabel(t);
         chip.addEventListener('click', () => equipTalisman(id));
         bagWrap.appendChild(chip);
       });
@@ -3000,7 +3114,7 @@
       const card = document.createElement('div');
       card.className = 'talismanCard tier-' + t.tier + (isPlaceholder || offer.bought ? ' duplicate' : '') + (!isPlaceholder && !offer.bought && !affordable ? ' unaffordable' : '');
       const priceLine = isPlaceholder ? '' : `<div class="rewardLine">${offer.bought ? 'Bought' : offer.price + 'g'}</div>`;
-      card.innerHTML = `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>${priceLine}`;
+      card.innerHTML = `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>${talismanTagsLine(t) ? `<div class="talismanTags">${talismanTagsLine(t)}</div>` : ''}${priceLine}`;
       if (!isPlaceholder && !offer.bought) {
         card.style.cursor = 'pointer';
         card.addEventListener('click', () => buySpellweaverItem(idx));
@@ -3057,7 +3171,7 @@
         const t = TALISMANS.find(x => x.id === id);
         const card = document.createElement('div');
         card.className = 'talismanCard tier-' + t.tier;
-        card.innerHTML = `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>`;
+        card.innerHTML = `<div class="icon">${t.icon}</div><div class="name">${t.name}</div><div class="desc">${t.desc}</div>${talismanTagsLine(t) ? `<div class="talismanTags">${talismanTagsLine(t)}</div>` : ''}`;
         card.style.cursor = 'pointer';
         card.addEventListener('click', () => sacrificeTalisman(id));
         wrap.appendChild(card);
