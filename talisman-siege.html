@@ -239,6 +239,13 @@
   .tierCard .rewardLine { margin-top: 8px; font-size: 12px; color: #d8b84a; font-weight: 700; }
   #roomModalBody .talismanCards { margin-bottom: 16px; }
   #roomModalBody .talismanCard.unaffordable { opacity: 0.5; }
+  /* Shrine specifically, not every room modal — its offer list is the whole talisman bag
+     (potentially 12+ once Legacy bag-capacity is upgraded), unlike Spellweaver's fixed 3 offers
+     or the Inn's fixed 2 cards, so it's the one that actually needs more room and a scroll
+     fallback. Toggled onto .modalBox itself (see renderRoomModal) rather than widening every
+     modal via the shared .modalBox rule. */
+  .modalBox.wide { max-width: 900px; }
+  .modalBox.wide #roomModalBody .talismanCards { max-height: 55vh; overflow-y: auto; padding-right: 6px; }
   .affixRow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
   .affixBadge {
     background: #3d1f2e;
@@ -663,12 +670,23 @@
     afterimage: { cooldown: 10 },
     shockwave: { cooldown: 6.5 },
     smokescreen: { cooldown: 8 },
+    fireball: { cooldown: 5.5 },
+    hurricane: { cooldown: 9 },
   };
 
   // How long a smoke patch lingers on its hexes once thrown, and how much it slows enemies
   // caught inside it — both independent of the ability's own recast cooldown.
   const SMOKE_DURATION = 3;
   const SMOKE_SLOW_MULT = 0.5;
+
+  // Hurricane's Might's Push mechanic — every enemy within this many hexes of the hero gets
+  // shoved to the ring one hex farther out (same radius convention as Shockwave's own AoE), AND
+  // rotated along that new ring by a fixed angle (see pickPushDestination) for the "circular
+  // wind" swirl, not just a straight knockback. A pushed unit landing on Chasm falls to its death
+  // (see triggerFall) — everything else that blocks movement (Ice Wall, Ruins, the hero's own
+  // hex) simply stops the push for that unit instead.
+  const HURRICANE_RADIUS = 2;
+  const PUSH_ROTATION_RADIANS = Math.PI / 3; // ~60°, one hex-step's worth of "and over one tile"
 
   // ---------------- Data: random battlefield terrain ----------------
   // Rolled fresh for every combat encounter (see generateTerrainForEncounter) — unlike Ice Wall/
@@ -769,6 +787,10 @@
       triggerType: 'setup' },
     { id: 'beartrap',    tier: 'minor', type: 'setup', icon: '\u{1FAA4}', name: 'Bear Trap', desc: 'Before the fight, place 1 hex. The first enemy to step on it takes a heavy hit and is rooted for 2s, then it’s spent. Affects enemies only — you can walk over it freely.',
       triggerType: 'setup', scalesWith: ['dmg'] },
+    { id: 'fireball',    tier: 'major', type: 'ability', icon: '\u{2604}\u{FE0F}', name: 'Fireball', desc: `Every ${ABILITY_CFG.fireball.cooldown}s, hurl a fireball at your target for full damage, splashing 25% onto every hex adjacent to it — including you, if you're standing that close.`,
+      triggerType: 'ability', scalesWith: ['dmg'], frequencyGate: 'cooldown' },
+    { id: 'hurricane',   tier: 'major', type: 'ability', icon: '\u{1F32C}\u{FE0F}', name: "Hurricane's Might", desc: `Every ${ABILITY_CFG.hurricane.cooldown}s, a swirling gust pushes every enemy within ${HURRICANE_RADIUS} hexes outward and around you — anything shoved into a Chasm falls to its death.`,
+      triggerType: 'ability', frequencyGate: 'cooldown' },
   ];
 
   const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
@@ -1657,6 +1679,35 @@
     effects.push({ type: 'shockwave', x, y, life: 1 });
   }
 
+  // Fireball's travel streak (hero to target) and its arrival burst — same shape as
+  // spawnBolt/spawnShockwaveRing, just its own colors so it reads as fire rather than a bowshot
+  // or a stun pulse.
+  function spawnFireballBolt(x1, y1, x2, y2) {
+    effects.push({ type: 'fireballBolt', x1, y1, x2, y2, life: 1 });
+  }
+  function spawnFireballBurst(x, y) {
+    effects.push({ type: 'fireballBurst', x, y, life: 1 });
+  }
+
+  // Hurricane's Might's wind ring — a dashed circle (vs. Shockwave's solid one) so the two read
+  // as different effects at a glance even though both are "expanding ring centered on the hero."
+  function spawnHurricaneRing(x, y) {
+    effects.push({ type: 'hurricane', x, y, life: 1 });
+  }
+
+  function hexColorToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  // A unit pushed into a Chasm — appears at its last position, then shrinks and fades to black
+  // over its lifetime (draw() lerps both radius and color toward 0/black by e.life, see the
+  // effects dispatch) rather than just fading to transparent, per Nate's explicit spec. The
+  // enemy itself is already gone from `queue` by the time this plays (see triggerFall) — this is
+  // purely a lingering visual, same as every other effect.
+  function spawnFalling(x, y, r, color) {
+    effects.push({ type: 'falling', x, y, r, rgb: hexColorToRgb(color), life: 1 });
+  }
+
   // Returns the ACTUAL amount gained (post-clamp to maxHP), not the raw input — callers that log
   // it to the healing summary (see logHealing) want what really landed, not what would have if
   // the hero weren't already near full HP.
@@ -1980,6 +2031,126 @@
     smokeZones.push({ hexes, timer: SMOKE_DURATION });
     hexes.forEach(h => { const p = hexPixelPos(h.row, h.idx); spawnSmoke(p.x, p.y); });
     log('A smoke screen blankets the battlefield.', 'crit');
+  }
+
+  // Fireball — full damage to the current target, splashing 25% onto every one of its 6
+  // neighbor hexes. Deliberately includes the hero's own hex in that splash check (not just
+  // enemies) — if you're fighting adjacent to your target (melee weapon), you take the same 25%
+  // yourself. A real risk, per the spec, not an oversight.
+  function triggerFireball() {
+    const target = currentHeroTarget();
+    if (!target) return;
+    const s = computeStats();
+    const dmg = Math.max(1, Math.round(s.dmg));
+    const tp = enemyPos(target);
+    const heroP = heroPixelPos();
+    spawnFireballBolt(heroP.x, heroP.y, tp.x, tp.y);
+    spawnFireballBurst(tp.x, tp.y);
+    target.hp -= dmg;
+    target.flash = 1;
+    spawnDamageNumber(tp.x, tp.y - tp.r - 10, String(dmg), '#ff8c40');
+    logDamageDealt('Fireball', dmg);
+    applyLifesteal(dmg);
+    applyAffixReactions(target, dmg);
+    log(`Fireball explodes for ${dmg}!`, 'crit');
+
+    const splashDmg = Math.max(1, Math.round(s.dmg * 0.25));
+    const splashTargets = [];
+    neighborsOf(target.hex.row, target.hex.idx).forEach(h => {
+      const enemy = queue.find(e => e !== target && e.hex.row === h.row && e.hex.idx === h.idx);
+      if (enemy) splashTargets.push(enemy);
+      if (heroHex.row === h.row && heroHex.idx === h.idx) {
+        hero.hp -= splashDmg;
+        heroFlash = 1;
+        spawnSplash(heroP.x, heroP.y - 10);
+        spawnDamageNumber(heroP.x, heroP.y - 45, String(splashDmg), '#ff8c40');
+        logDamageTaken('Fireball (self)', splashDmg);
+        checkHeroDeath();
+      }
+    });
+    splashTargets.forEach(enemy => {
+      enemy.hp -= splashDmg;
+      enemy.flash = 1;
+      const ep = enemyPos(enemy);
+      spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(splashDmg), '#ff8c40');
+      logDamageDealt('Fireball', splashDmg);
+      applyLifesteal(splashDmg);
+      applyAffixReactions(enemy, splashDmg);
+    });
+    [target, ...splashTargets].filter(e => e.hp <= 0).forEach(killEnemy);
+  }
+
+  // Hurricane's Might's Push destination — picks the hex on the ring one step FARTHER from
+  // `aroundHex` that's angularly closest to "the unit's current angle, rotated by
+  // PUSH_ROTATION_RADIANS." Real pixel angles rather than a direction-index lookup, since this
+  // grid's row/idx neighbor rule (columns alternate 7/6 tall) has no clean mapping onto a fixed
+  // set of hex directions the way a standard axial-coordinate hex grid would — but real pixel
+  // positions always exist and are exact, so snapping to whichever REAL hex on the target ring
+  // is closest to the rotated angle sidesteps needing that mapping at all. Returns null if
+  // `unitHex` is already at the far edge of the board (no ring further out exists).
+  function pickPushDestination(unitHex, aroundHex) {
+    const d = hexDistance(unitHex, aroundHex);
+    const ring = allHexes().filter(h => hexDistance(h, aroundHex) === d + 1);
+    if (!ring.length) return null;
+    const centerP = hexPixelPos(aroundHex.row, aroundHex.idx);
+    const fromP = hexPixelPos(unitHex.row, unitHex.idx);
+    const targetTheta = Math.atan2(fromP.y - centerP.y, fromP.x - centerP.x) + PUSH_ROTATION_RADIANS;
+    let best = null, bestDiff = Infinity;
+    ring.forEach(h => {
+      const hp = hexPixelPos(h.row, h.idx);
+      let diff = Math.abs(Math.atan2(hp.y - centerP.y, hp.x - centerP.x) - targetTheta);
+      if (diff > Math.PI) diff = Math.PI * 2 - diff;
+      if (diff < bestDiff) { bestDiff = diff; best = h; }
+    });
+    return best;
+  }
+
+  // Chasm claims a pushed unit — removed from combat exactly like any other kill (same gold/
+  // wave-cleared bookkeeping via killEnemy), but with its own fall visual (see spawnFalling)
+  // instead of the usual flash/slash hit-feedback, since nothing actually "hit" it.
+  function triggerFall(enemy) {
+    const p = enemyPos(enemy);
+    const notable = enemy.isBoss || enemy.weight === 'miniboss' || enemy.weight === 'boss';
+    const color = notable ? '#d97b3f' : (ROLE_COLOR[enemy.role] || '#c25b5b');
+    spawnFalling(p.x, p.y, p.r, color);
+    log(`${enemy.isBoss ? 'The boss' : 'An enemy'} is swept into the chasm and falls to its death!`, 'crit');
+    killEnemy(enemy);
+  }
+
+  // Hurricane's Might — every enemy within HURRICANE_RADIUS hexes gets pushed to the ring one
+  // hex farther out AND rotated along it (see pickPushDestination), closer units resolving first
+  // so a farther unit can never land on a hex a closer one just claimed (same priority-queue
+  // pattern resolveEnemyMovement already uses). Ice Wall/Ruins/the hero's own hex simply stop the
+  // push for whoever would land there; Chasm is the one exception — landing there is the whole
+  // point, and triggers triggerFall instead of a normal move.
+  function triggerHurricane() {
+    const heroP = heroPixelPos();
+    spawnHurricaneRing(heroP.x, heroP.y);
+    const affected = queue.filter(e => hexDistance(e.hex, heroHex) <= HURRICANE_RADIUS)
+      .sort((a, b) => hexDistance(a.hex, heroHex) - hexDistance(b.hex, heroHex));
+    if (!affected.length) return;
+    const claimed = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
+    const chasmKeys = new Set(terrainFeatures.filter(f => f.type === 'chasm').map(f => hexKey(f.hex.row, f.hex.idx)));
+    const blockedKeys = new Set([
+      hexKey(heroHex.row, heroHex.idx),
+      ...iceWallHexes.map(h => hexKey(h.row, h.idx)),
+      ...terrainFeatures.filter(f => f.type === 'ruins').map(f => hexKey(f.hex.row, f.hex.idx)),
+    ]);
+    let pushedAny = false;
+    affected.forEach(e => {
+      const oldKey = hexKey(e.hex.row, e.hex.idx);
+      const dest = pickPushDestination(e.hex, heroHex);
+      if (!dest) return; // already at the board's edge — nowhere farther for the wind to send it
+      const destKey = hexKey(dest.row, dest.idx);
+      if (blockedKeys.has(destKey) || claimed.has(destKey)) return;
+      claimed.delete(oldKey);
+      claimed.add(destKey);
+      e.hex = dest;
+      e.lunge = 1; // reuse the existing "just got shoved" jolt
+      pushedAny = true;
+      if (chasmKeys.has(destKey)) triggerFall(e);
+    });
+    if (pushedAny) log('A hurricane blast sweeps the battlefield!', 'crit');
   }
 
   // Bear Trap's payoff — a heavy one-time hit plus a root, using the existing stunTimer field
@@ -3139,6 +3310,7 @@
     const modal = document.getElementById('roomModal');
     if (phase !== 'roomVisit') { modal.classList.add('hidden'); return; }
     modal.classList.remove('hidden');
+    modal.querySelector('.modalBox').classList.toggle('wide', chosenEncounter.roomKey === 'shrine');
     document.getElementById('roomModalTitle').textContent = chosenEncounter.tierLabel;
     document.getElementById('roomModalSub').textContent = chosenEncounter.desc;
     const body = document.getElementById('roomModalBody');
@@ -3669,10 +3841,33 @@
   // twice), and guarantees the connector appears regardless of which of the two happens to be
   // rendered "first" in terrainFeatures.
   const RUINS_RUBBLE_OFFSETS = [[-8, -6, 2.5], [6, -9, 2], [-4, 8, 2], [10, 3, 2], [0, -2, 1.5]];
-  function drawRuinsHex(p, hex, ruinsKeys) {
+  const RUINS_BRICK_W = 12, RUINS_BRICK_H = 6, RUINS_BRICK_GAP = 1.5;
+  const RUINS_BRICK_COLORS = ['#7a7263', '#726a5c', '#7f7768'];
+  // Brick courses are laid out in ABSOLUTE canvas coordinates (not hex-relative), so adjacent
+  // Ruins hexes automatically share the same grid and their brick rows/columns line up across the
+  // shared edge — free reinforcement of the "connects into one continuous wall" effect, not
+  // something separately coordinated between neighboring hexes.
+  function drawRuinsBrickwork(p) {
+    ctx.save();
     hexPathAt(p);
-    ctx.fillStyle = '#6b6558';
-    ctx.fill();
+    ctx.clip();
+    ctx.fillStyle = '#3a3733'; // mortar/grout showing through the gaps between bricks
+    ctx.fillRect(p.x - HEX_RADIUS, p.y - HEX_RADIUS, HEX_RADIUS * 2, HEX_RADIUS * 2);
+    let rowIndex = 0;
+    for (let y = p.y - HEX_RADIUS - RUINS_BRICK_H; y < p.y + HEX_RADIUS + RUINS_BRICK_H; y += RUINS_BRICK_H + RUINS_BRICK_GAP) {
+      const rowOffset = (rowIndex % 2 === 0) ? 0 : RUINS_BRICK_W / 2; // running-bond stagger
+      let colIndex = 0;
+      for (let x = p.x - HEX_RADIUS - RUINS_BRICK_W + rowOffset; x < p.x + HEX_RADIUS + RUINS_BRICK_W; x += RUINS_BRICK_W + RUINS_BRICK_GAP) {
+        ctx.fillStyle = RUINS_BRICK_COLORS[(rowIndex + colIndex) % RUINS_BRICK_COLORS.length];
+        ctx.fillRect(x, y, RUINS_BRICK_W, RUINS_BRICK_H);
+        colIndex++;
+      }
+      rowIndex++;
+    }
+    ctx.restore();
+  }
+  function drawRuinsHex(p, hex, ruinsKeys) {
+    drawRuinsBrickwork(p);
     ctx.fillStyle = 'rgba(58,54,47,0.6)';
     RUINS_RUBBLE_OFFSETS.forEach(([dx, dy, r]) => {
       ctx.beginPath();
@@ -3955,6 +4150,58 @@
         ctx.beginPath();
         ctx.arc(e.x, e.y, maxR * t, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.restore();
+      } else if (e.type === 'fireballBolt') {
+        // Same trailing-streak shape as 'bolt', just bigger and orange.
+        const t = 1 - a;
+        const tTail = Math.max(0, t - 0.18);
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, a * 2);
+        ctx.strokeStyle = '#ff8c40';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(e.x1 + (e.x2 - e.x1) * tTail, e.y1 + (e.y2 - e.y1) * tTail);
+        ctx.lineTo(e.x1 + (e.x2 - e.x1) * t, e.y1 + (e.y2 - e.y1) * t);
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === 'fireballBurst') {
+        // Filled (not just stroked) so the AoE explosion reads as a blast, not a ping — sized to
+        // roughly cover the target's hex plus its ring of 6 neighbors.
+        const t = 1 - a;
+        const maxR = HEX_COL_SPACING * 1.35;
+        ctx.save();
+        ctx.globalAlpha = a * 0.55;
+        ctx.fillStyle = '#ff7a30';
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, maxR * t, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      } else if (e.type === 'hurricane') {
+        // Dashed, not solid, so it reads as wind rather than Shockwave's stun pulse even though
+        // both are "expanding ring centered on the hero."
+        const t = 1 - a;
+        const maxR = HEX_COL_SPACING * (HURRICANE_RADIUS + 0.3);
+        ctx.save();
+        ctx.globalAlpha = a * 0.5;
+        ctx.strokeStyle = '#bcd9e0';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([10, 6]);
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, maxR * t, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      } else if (e.type === 'falling') {
+        // Shrinks AND fades toward black (not transparent) as life runs out — a genuine color
+        // lerp toward [0,0,0], not just globalAlpha, per Nate's explicit "fading to black" spec.
+        const t = Math.max(0, e.life);
+        const [r0, g0, b0] = e.rgb;
+        ctx.save();
+        ctx.globalAlpha = t;
+        ctx.fillStyle = `rgb(${Math.round(r0 * t)},${Math.round(g0 * t)},${Math.round(b0 * t)})`;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.r * t, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
       ctx.globalAlpha = 1;
@@ -4487,6 +4734,8 @@
         if (id === 'afterimage') triggerAfterImage();
         if (id === 'shockwave') triggerShockwave();
         if (id === 'smokescreen') triggerSmokeScreen();
+        if (id === 'fireball') triggerFireball();
+        if (id === 'hurricane') triggerHurricane();
       }
     });
 
@@ -4527,7 +4776,9 @@
     dmgNumbers = dmgNumbers.filter(n => n.life > 0);
     effects.forEach(e => {
       const rate = e.type === 'cleaveSlice' ? 1.4 : e.type === 'slash' ? 3.5 : e.type === 'bolt' ? 2.8
-        : e.type === 'shock' ? 4 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2 : 2;
+        : e.type === 'shock' ? 4 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2
+        : e.type === 'fireballBolt' ? 2.8 : e.type === 'fireballBurst' ? 1.0 : e.type === 'hurricane' ? 1.2
+        : e.type === 'falling' ? 0.55 : 2;
       e.life -= dt * rate;
     });
     effects = effects.filter(e => e.life > 0);
