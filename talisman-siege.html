@@ -70,8 +70,16 @@
      renders squished. A plain max-height clamp was tried first and rejected — for a block box
      whose width is a definite value (not auto), browsers clamp height alone without reflowing
      width back down, which stretched the hex board vertically. */
+  /* --canvas-overhead is measured live by updateCanvasHeightBudget() (see script, bottom of
+     file) rather than hand-tuned here — this value used to be a hardcoded pixel guess that
+     needed re-measuring and manually updating by hand every time the topbar/encounter-preview/
+     bottom-row's real height changed (see the item 30→32 history: 560 became 480 the moment the
+     hex board widened and changed the bottom row's proportions). The 480px below is only a
+     same-tab-first-paint fallback for the instant before JS runs; the live value takes over
+     immediately after. */
+  :root { --canvas-overhead: 480px; }
   #canvasWrap {
-    width: min(100%, calc((100vh - 480px) * 5 / 3));
+    width: min(100%, calc((100vh - var(--canvas-overhead)) * 5 / 3));
     aspect-ratio: 700 / 420;
     min-width: 320px;
     margin: 0 auto;
@@ -4348,9 +4356,46 @@
       document.querySelectorAll('.stanceBtn').forEach(b => b.classList.toggle('active', b === btn));
     });
   });
+  // Keeps #canvasWrap's height budget (see --canvas-overhead in the CSS) honest against the
+  // REAL rendered height of everything around it, instead of a hardcoded pixel guess that goes
+  // stale the moment the topbar/encounter-preview/bottom-row's content changes shape — exactly
+  // the "future UI edits shouldn't need this re-tuned by hand" ask. Measures by temporarily
+  // hiding both #canvasWrap and .windowSidebar (not just one) and reading #app's resulting
+  // height: since the top row's real height is max(canvasHeight, sidebarHeight) rather than
+  // their sum, sidebar has to be zeroed out too or its height gets double-counted as if it
+  // stacked on top of the canvas instead of sharing the same row. What's left over at that point
+  // — h1, topbar, encounter preview, paddings/gaps, the bottom row — is exactly the part of the
+  // page that's independent of both, which is what the canvas's own height budget should be
+  // measured against. The hide/measure/restore happens synchronously in one tick, before the
+  // browser paints, so there's no visible flash.
+  function updateCanvasHeightBudget() {
+    const wrap = document.getElementById('canvasWrap');
+    const sidebar = document.querySelector('.windowSidebar');
+    const app = document.getElementById('app');
+    const wrapPrevDisplay = wrap.style.display;
+    const sidebarPrevDisplay = sidebar.style.display;
+    wrap.style.display = 'none';
+    sidebar.style.display = 'none';
+    const overhead = app.getBoundingClientRect().height + 16; // small safety buffer for subpixel/scrollbar rounding
+    wrap.style.display = wrapPrevDisplay;
+    sidebar.style.display = sidebarPrevDisplay;
+    document.documentElement.style.setProperty('--canvas-overhead', Math.round(overhead) + 'px');
+  }
+  // Watches only the pieces that can actually change the overhead — not #canvasWrap or
+  // .windowSidebar themselves, since our own hide/restore above would otherwise trigger this
+  // observer against its own measurement pass. Covers every future edit that changes any of
+  // these (more shop rows, a taller sidebar section pushing bottomRow's neighbors, added/removed
+  // topbar content, etc.) without needing this list extended by hand — .windowBottomRow's own
+  // rendered height already reflects whatever's inside it, however that changes later.
+  const canvasBudgetObserver = new ResizeObserver(updateCanvasHeightBudget);
+  [document.querySelector('#app > h1'), document.getElementById('topbar'),
+   document.getElementById('encounterPreview'), document.querySelector('.windowBottomRow')]
+    .forEach(el => { if (el) canvasBudgetObserver.observe(el); });
+
   bestWave = Number(lsGet(BEST_WAVE_KEY) || 0);
   legacy = loadLegacy();
   restart();
+  updateCanvasHeightBudget();
   setInterval(simulationStep, SIM_STEP * 1000);
   requestAnimationFrame(renderTick);
 })();
