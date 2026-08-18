@@ -234,9 +234,14 @@
   #encounterPreview.panel { padding: 8px 14px; }
   #encounterPreview.panel h2 { margin-bottom: 4px; }
   .tierCard.tier-brute { border-color: #c25b5b; }
-  .tierCard.tier-pack { border-color: #5a9e5a; }
-  .tierCard.tier-skirmish { border-color: #d8b84a; }
+  .tierCard.tier-swarm { border-color: #8ea63f; }
+  .tierCard.tier-horde { border-color: #b5652f; }
+  .tierCard.tier-bandits { border-color: #a9865a; }
+  .tierCard.tier-duelists { border-color: #6b7d99; }
   .tierCard.tier-ambush { border-color: #8a5bd6; }
+  .tierCard.tier-kingsguard { border-color: #3f7a8c; }
+  .tierCard.tier-sharpshooters { border-color: #d68a3f; }
+  .tierCard.tier-coven { border-color: #9a6fd4; }
   .tierCard.tier-boss { border-color: #d97b3f; }
   .tierCard.tier-noncombat { border-color: #6bc6ff; }
   .tierCard .rewardLine { margin-top: 8px; font-size: 12px; color: #d8b84a; font-weight: 700; }
@@ -742,6 +747,10 @@
   // determined (the ranged ally it spawned next to, tracked via .protectsId).
   const APPRENTICE_SHIELD_RADIUS = 2;
   const APPRENTICE_SHIELD_DAMAGE_MULT = 0.5;
+  // Haste — the Apprentice's fallback buff when it has no ranged ally to shield (see
+  // buildQueueFromEncounter/hasteMultFor). +50% attack speed and +50% movement speed on the
+  // strongest melee unit in the encounter.
+  const APPRENTICE_HASTE_MULT = 1.5;
 
   // ---------------- Data: random battlefield terrain ----------------
   // Rolled fresh for every combat encounter (see generateTerrainForEncounter) — unlike Ice Wall/
@@ -831,7 +840,7 @@
       triggerType: 'reactive', scalesWith: ['maxHP'] },
     { id: 'overcharge',  tier: 'minor', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.',
       triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
-    { id: 'executioner', tier: 'minor', icon: '\u{1F480}', name: 'Executioner',   desc: 'Instantly execute any enemy you hit below 15% HP.',
+    { id: 'executioner', tier: 'minor', icon: '\u{1F480}', name: 'Executioner',   desc: 'If a hit would knock an enemy below 15% HP, it dies outright instead.',
       triggerType: 'proc', frequencyGate: 'attackSpeed' },
     { id: 'goldentouch', tier: 'major', icon: '\u{1F4B0}', name: 'Golden Touch',  desc: '+30% gold earned, from kills and from combat rewards alike.',
       triggerType: 'passive', modifies: ['gold'] },
@@ -1094,22 +1103,28 @@
   // Warband Leader/Knight/Archer are smart, Wretch/Raider/Brute are mindless.
   // `desc` (only set where there's a real mechanic worth flagging — see the setup-phase enemy
   // tooltip, enemyTooltipText) is purely informational; nothing in combat reads it.
+  // `minDepth` (default 1) gates which units can even be picked for a slot at all, independent
+  // of AXIS_DROP_DEPTH's role/weight-loosening above — that's about composition randomness
+  // among ALREADY-eligible units; this is about "craftier" units not existing in the pool until
+  // you're deep enough to meet them. Two tiers today: plain grunts/tank from depth 1, then reach/
+  // rate tactics (Leader, Archer) at depth 4, then true tactical curveballs (Mage's unlimited
+  // range, Apprentice's shield/haste) at depth 8. See pickUnitForSlot/archetypeAvailableAtDepth.
   const ENEMY_TYPES = {
-    wretch: { name: 'Wretch',         role: 'melee',  weight: 'light',    dmgMult: 0.7, moveSpeedMult: 1.3 },
-    raider: { name: 'Raider',         role: 'melee',  weight: 'medium',   dmgMult: 1.0, moveSpeedMult: 1.0 },
-    leader: { name: 'Warband Leader', role: 'reach',  weight: 'heavy',    dmgMult: 1.7, moveSpeedMult: 1.0, smart: true,
+    wretch: { name: 'Wretch',         role: 'melee',  weight: 'light',    dmgMult: 0.7, moveSpeedMult: 1.3, minDepth: 1 },
+    raider: { name: 'Raider',         role: 'melee',  weight: 'medium',   dmgMult: 1.0, moveSpeedMult: 1.0, minDepth: 1 },
+    leader: { name: 'Warband Leader', role: 'reach',  weight: 'heavy',    dmgMult: 1.7, moveSpeedMult: 1.0, smart: true, minDepth: 4,
       desc: 'Reach weapon — attacks from 2 hexes away, and hits harder than a typical grunt.' },
-    knight: { name: 'Knight',         role: 'melee',  weight: 'heavy',    dmgMult: 1.0, moveSpeedMult: 0.8, smart: true },
-    archer: { name: 'Archer',         role: 'ranged', weight: 'light',    dmgMult: 0.5, atkIntervalMult: 0.5, moveSpeedMult: 1.1, smart: true,
+    knight: { name: 'Knight',         role: 'melee',  weight: 'heavy',    dmgMult: 1.0, moveSpeedMult: 0.8, smart: true, minDepth: 1 },
+    archer: { name: 'Archer',         role: 'ranged', weight: 'light',    dmgMult: 0.5, atkIntervalMult: 0.5, moveSpeedMult: 1.1, smart: true, minDepth: 4,
       desc: 'Fires from range at half damage, but twice as often.' },
-    brute:  { name: 'Brute',          role: 'melee',  weight: 'miniboss', dmgMult: 1.6, moveSpeedMult: 0.7 },
+    brute:  { name: 'Brute',          role: 'melee',  weight: 'miniboss', dmgMult: 1.6, moveSpeedMult: 0.7, minDepth: 1 },
     // A hard-hitting caster: atkIntervalMult 2.5 against the 1.2s baseline lands exactly on the
     // requested "every 3 seconds." rangeOverride (Infinity) is the enemy-side counterpart to the
     // hero weapons' own rangeOverride (Whip) — see enemyBaseRange, threaded through every place
     // that used to read ROLE_RANGE[e.role] directly for an enemy's own attack/approach range.
     // Obeys LOS like anything else (hasLineOfSight is never bypassed by range alone), it just
     // never gets range-capped the way a normal 'ranged' unit would.
-    mage:   { name: 'Mage',           role: 'ranged', weight: 'light',    dmgMult: 3.0, atkIntervalMult: 2.5, smart: true, rangeOverride: Infinity,
+    mage:   { name: 'Mage',           role: 'ranged', weight: 'light',    dmgMult: 3.0, atkIntervalMult: 2.5, smart: true, rangeOverride: Infinity, minDepth: 8,
       desc: 'Fires a heavy lightning bolt every 3s. Unlimited range as long as it has a clear line of sight.' },
     // A pure support unit — dmgMult 0 combined with ROLE_RANGE.support = 0 (see there) means it
     // can never actually land a hit (min-1-damage clamp aside, hexDistance <= 0 is never true
@@ -1117,8 +1132,8 @@
     // allows). It still approaches the hero like anything else — there's no bespoke "stay near
     // your ward" movement behavior — its real job (the shield) works independently of that; see
     // buildQueueFromEncounter's placement pass and shieldedHexKeys/shieldMultAgainst.
-    apprentice: { name: "Mage's Apprentice", role: 'support', weight: 'light', dmgMult: 0, moveSpeedMult: 1.0,
-      desc: "Shields the nearest ranged ally within 2 hexes — attacking it from outside that shield deals 50% less damage. Deals no damage itself." },
+    apprentice: { name: "Mage's Apprentice", role: 'support', weight: 'light', dmgMult: 0, moveSpeedMult: 1.0, minDepth: 8,
+      desc: "Shields the nearest ranged ally within 2 hexes — attacking it from outside that shield deals 50% less damage. With no ranged ally, it Hastes the strongest melee unit instead (+50% attack/movement speed, glowing hex). Deals no damage itself." },
   };
 
   // Per-unit opts fed straight into drawFacingUnit (see its weaponShape dispatch) — this is
@@ -1207,11 +1222,28 @@
   // Picks one unit type for a slot, honoring only whichever axes are still active at this
   // depth. Falls back to the slot's full (unloosened) filter if the loosened pool ever comes
   // up empty — shouldn't happen with the current roster, but keeps this from ever crashing.
+  // `minDepth` is applied on TOP of role/weight in both passes — it's a separate, always-on
+  // gate (which units even exist in the pool yet), not something that ever loosens with depth
+  // the way role/weight do; see ENEMY_TYPES' own comment and archetypeAvailableAtDepth below.
   function pickUnitForSlot(slot, depth) {
+    const withinDepth = id => depth >= (ENEMY_TYPES[id].minDepth || 1);
     const activeAxes = slotFilterAxes(depth);
-    let pool = Object.keys(ENEMY_TYPES).filter(id => matchesSlot(id, slot, activeAxes));
-    if (!pool.length) pool = Object.keys(ENEMY_TYPES).filter(id => matchesSlot(id, slot, ['role', 'weight']));
+    let pool = Object.keys(ENEMY_TYPES).filter(id => matchesSlot(id, slot, activeAxes) && withinDepth(id));
+    if (!pool.length) pool = Object.keys(ENEMY_TYPES).filter(id => matchesSlot(id, slot, ['role', 'weight']) && withinDepth(id));
     return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // Whether every slot in this archetype has at least one depth-eligible unit right now —
+  // generateEncounterOption/buildQueueFromEncounter both unconditionally resolve every slot's
+  // unit type (even one whose rolled count ends up 0), so an archetype offered before any of
+  // its slots can be satisfied would crash on `undefined.weight`. Uses the STRICT (unloosened)
+  // role/weight match, same as pickUnitForSlot's own fallback, since that's the true "can this
+  // ever compose" question — see generatePathChoices, which filters ARCHETYPE_KEYS through this
+  // before offering any as a choice.
+  function archetypeAvailableAtDepth(key, depth) {
+    return ARCHETYPES[key].slots.every(slot =>
+      Object.keys(ENEMY_TYPES).some(id => matchesSlot(id, slot, ['role', 'weight']) && depth >= (ENEMY_TYPES[id].minDepth || 1))
+    );
   }
 
   function composeArchetype(archetypeKey, depth) {
@@ -1222,32 +1254,77 @@
     }));
   }
 
+  // Count helpers for the swarm-y themes — same shape as baseEncounterCount (max 4), just
+  // bigger ranges to match "tons of enemies" (Swarm) down to "a small mob" (Bandits).
+  function swarmCount(depth) { return Math.min(14, 6 + Math.floor(depth / 2)); }
+  function hordeCount(depth) { return Math.min(9, 4 + Math.floor(depth / 3)); }
+  function banditsCount(depth) { return Math.min(5, 2 + Math.floor(depth / 4)); }
+
   // hordeEligible: whether the Horde affix (+2 enemies) can roll for this archetype at all —
-  // only ones with a countable "grunt" group (slots[0]) make sense to swell.
+  // only ones with a countable "grunt" group (slots[0]) make sense to swell; the small curated
+  // squads (Duelists, King's Guard) and the single-brute-plus-maybe-chaff shape (Brutish Fight)
+  // deliberately opt out, since swelling their signature slot would undercut the theme.
   // forceMultiSide: Ambush's whole distinguishing trait is spawn placement, not its roster —
   // see buildQueueFromEncounter's orderForMultiSideSpawn.
+  // 9 themed encounters, reworked from the old 4 rigid ones (Nate: Skirmish was always exactly
+  // Knight+Archer, Brute was always a lone 1v1) — every slot below is deliberately loosened
+  // (weight/count ranges, not fixed singles) so the same theme reads differently fight to fight.
+  // Availability at a given depth is derived, not authored per-archetype — see
+  // archetypeAvailableAtDepth and ENEMY_TYPES' own minDepth gate: Brutish Fight/Swarm/Horde/
+  // Bandits/Duelists are depth-1 (composable from wretch/raider/knight/brute alone); Ambush/
+  // King's Guard/Sharpshooters need Archer (depth 4); Coven needs the Apprentice (depth 8).
   const ARCHETYPES = {
     brute: {
-      label: 'Brute', hordeEligible: false, forceMultiSide: false,
-      slots: [{ role: 'melee', weight: 'miniboss', count: 1 }],
-    },
-    pack: {
-      label: 'Pack', hordeEligible: true, forceMultiSide: false,
+      label: 'Brutish Fight', hordeEligible: false, forceMultiSide: false,
       slots: [
-        { role: 'melee', weight: ['light', 'medium'], countFn: depth => baseEncounterCount(depth) + 1 },
-        { role: 'reach', weight: 'heavy', count: 1 },
+        { role: 'melee', weight: ['heavy', 'miniboss'], count: 1 },
+        // 0-2 light/medium support, more likely to show up the deeper you go — "usually a
+        // brute alone, sometimes a unit or two backing it up."
+        { role: 'melee', weight: ['light', 'medium'], countFn: depth => Math.random() < Math.min(0.8, 0.2 + depth * 0.03) ? (Math.random() < 0.5 ? 1 : 2) : 0 },
       ],
     },
-    skirmish: {
-      label: 'Skirmish', hordeEligible: false, forceMultiSide: false,
-      slots: [{ role: 'melee', weight: 'heavy', count: 1 }, { role: 'ranged', weight: 'light', count: 1 }],
+    swarm: {
+      label: 'Swarm', hordeEligible: true, forceMultiSide: false,
+      slots: [{ role: 'melee', weight: ['light', 'medium'], countFn: swarmCount }],
+    },
+    horde: {
+      label: 'Horde', hordeEligible: true, forceMultiSide: false,
+      slots: [
+        { role: 'melee', weight: ['light', 'medium'], countFn: hordeCount },
+        // Role deliberately left open — an occasional heavy is the point, whether that's a
+        // mindless Knight early on or a Warband Leader once reach tactics unlock at depth 4.
+        { weight: 'heavy', count: 1 },
+      ],
+    },
+    bandits: {
+      label: 'Bandits', hordeEligible: true, forceMultiSide: false,
+      slots: [{ role: 'melee', weight: ['light', 'medium'], countFn: banditsCount }],
+    },
+    duelists: {
+      label: 'Duelists', hordeEligible: false, forceMultiSide: false,
+      // No ranged at all — a small, genuinely tough 1-2-unit tactical fight, not chaff.
+      slots: [{ role: ['melee', 'reach'], weight: ['medium', 'heavy'], count: 2 }],
     },
     ambush: {
       label: 'Ambush', hordeEligible: true, forceMultiSide: true,
       slots: [
-        { role: 'melee', weight: ['light', 'medium'], countFn: depth => baseEncounterCount(depth) + 1 },
-        { role: 'reach', weight: 'heavy', count: 1 },
+        // The "perimeter" — forceMultiSide/orderForMultiSideSpawn already guarantees units
+        // land on both sides of the hero, which is what actually sells "surrounded" on this
+        // grid; a literal ranged-ring/melee-center placement wasn't built on top of that.
+        { role: 'ranged', weight: ['light', 'medium'], countFn: depth => Math.min(6, 2 + Math.floor(depth / 3)) },
+        { role: 'melee', weight: ['light', 'medium'], countFn: () => 1 + Math.floor(Math.random() * 2) },
       ],
+    },
+    kingsguard: {
+      label: "King's Guard", hordeEligible: false, forceMultiSide: false,
+      slots: [
+        { role: ['melee', 'reach'], weight: ['medium', 'heavy'], countFn: () => 1 + Math.floor(Math.random() * 2) },
+        { role: ['ranged', 'reach'], weight: ['light', 'medium'], countFn: () => 1 + Math.floor(Math.random() * 2) },
+      ],
+    },
+    sharpshooters: {
+      label: 'Sharpshooters', hordeEligible: true, forceMultiSide: false,
+      slots: [{ role: 'ranged', weight: ['light', 'medium'], countFn: depth => Math.min(5, 2 + Math.floor(depth / 4)) }],
     },
     // Pairs a caster (Archer or Mage — whichever the roll picks) with a Mage's Apprentice, whose
     // own placement (see buildQueueFromEncounter) always lands it next to whichever ranged unit
@@ -1266,13 +1343,17 @@
 
   const ARCHETYPE_FLAVOR = {
     brute: ['A hulking brute blocks the path alone.', 'Something huge and scarred lumbers forward.'],
-    pack: ['A war-band of the damned circles, one among them hitting harder than the rest.', 'Raiders close in, taking their cue from a hardened leader.'],
-    skirmish: ['A knight and archer hold the line together.', 'Steel up front, arrows from behind — a disciplined pair.'],
+    swarm: ['A writhing mass of the starved pours toward you.', 'They come in a flood — none of them alone, none of them strong.'],
+    horde: ['A war-band of the damned circles, one among them hitting harder than the rest.', 'Raiders close in, taking their cue from a hardened leader.'],
+    bandits: ['A ragged crew steps out from the treeline, blades already drawn.', 'Opportunists — they smell coin, and they smell blood.'],
+    duelists: ['Two seasoned killers square up, unhurried.', 'No rabble here — just skill, and the intent to use it.'],
     ambush: ['Shapes move on both sides — you are already surrounded.', 'The horde has boxed you in from every direction.'],
+    kingsguard: ['A disciplined line holds formation, shields and spears in step.', "Sworn steel — they don't break, and they don't scatter."],
+    sharpshooters: ['Arrows nock in the dark, none of them aimed at you yet.', 'A volley waits to fall the moment you step into the open.'],
     coven: ['A caster mutters over a warding circle, an acolyte hovering close at hand.', 'Robed figures huddle around a shimmer in the air — someone is being protected.'],
   };
   function pickArchetypeFlavor(key) {
-    const pool = ARCHETYPE_FLAVOR[key] || ARCHETYPE_FLAVOR.pack;
+    const pool = ARCHETYPE_FLAVOR[key] || ARCHETYPE_FLAVOR.horde;
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
@@ -1359,16 +1440,20 @@
     }, reward);
   }
 
-  // 3 of the 4 archetypes, shuffled — no fixed order, since these aren't a difficulty ladder
-  // to keep visually consistent the way Easy/Standard/Dangerous were; it's fine (good, even)
-  // for it to be unpredictable which 3 show up. Non-combat slots always offer every room type in
-  // NON_COMBAT_NODE_TYPES' own declared order — deliberately NOT shuffled, unlike combat, since
-  // Nate's ask here was specifically for a consistent, predictable order across every shop visit.
+  // 3 of the currently-available archetypes, shuffled — no fixed order, since these aren't a
+  // difficulty ladder to keep visually consistent the way Easy/Standard/Dangerous were; it's
+  // fine (good, even) for it to be unpredictable which 3 show up. "Available" is depth-gated
+  // (see archetypeAvailableAtDepth/ENEMY_TYPES' minDepth) — early depths only offer the themes
+  // composable from plain grunts, deeper ones unlock as craftier units join the roster. Non-
+  // combat slots always offer every room type in NON_COMBAT_NODE_TYPES' own declared order —
+  // deliberately NOT shuffled, unlike combat, since Nate's ask here was specifically for a
+  // consistent, predictable order across every shop visit.
   function generatePathChoices(depth, floorPosition) {
     if (isNonCombatSlot(floorPosition)) {
       return NON_COMBAT_NODE_TYPES.map(r => Object.assign({ type: 'noncombat' }, r));
     }
-    return shuffle(ARCHETYPE_KEYS).slice(0, 3).map(k => generateEncounterOption(depth, k));
+    const available = ARCHETYPE_KEYS.filter(k => archetypeAvailableAtDepth(k, depth));
+    return shuffle(available).slice(0, 3).map(k => generateEncounterOption(depth, k));
   }
 
   // The mandatory floor-capstone fight — not a player choice, always the toughest single
@@ -1549,6 +1634,12 @@
   let heroTargetId = null;  // sticky target (see pickHeroTarget) — survives across attacks, not re-rolled every hit
   let smokeZones = [];       // active Smoke Screen patches: { hexes: [{row,idx}...], timer }, ticked down
                               // in real sim-time by simulationStep, reset to [] at the start of every fight
+  // Damage scheduled to land later than the swing that caused it — currently only Boomerang's
+  // bounce hits (see heroAttack), so their damage numbers appear when the thrown icon actually
+  // reaches that hex instead of the instant it's thrown. { delay, apply() }, ticked down in
+  // sim-time by simulationStep exactly like every other timer in this file (never the render
+  // loop, which stays purely visual) — reset to [] at the start of every fight.
+  let pendingActions = [];
   // Per-fight damage-source tallies, shown in the post-combat summary (see showCombatSummary/
   // gameOver) — reset to empty at the start of every fight so the screen only ever reflects the
   // fight that just ended, not a running lifetime total.
@@ -1883,9 +1974,16 @@
         // Prioritize a Mage by name if one is present; otherwise any ranged ally already placed.
         const rangedAllies = list.filter(e => e.role === 'ranged');
         const protectedUnit = rangedAllies.find(e => e.typeId === 'mage') || rangedAllies[0];
+        // No ranged ally to shield (e.g. it spawned entirely alongside melee units — the real
+        // bug Nate reported) — Haste the strongest melee unit instead, rather than leaving the
+        // Apprentice with nothing to actually do. "Strongest" by max HP, same convention the
+        // hero's own targeting mode uses.
+        const hastedUnit = protectedUnit ? null
+          : list.filter(e => e.role === 'melee').sort((a, b) => b.maxHp - a.maxHp)[0];
+        const standNear = protectedUnit || hastedUnit;
         let hex = null;
-        if (protectedUnit) {
-          const freeNeighbors = neighborsOf(protectedUnit.hex.row, protectedUnit.hex.idx)
+        if (standNear) {
+          const freeNeighbors = neighborsOf(standNear.hex.row, standNear.hex.idx)
             .filter(h => !occupiedKeys.has(hexKey(h.row, h.idx)) && !(h.row === heroHex.row && h.idx === heroHex.idx));
           hex = freeNeighbors[Math.floor(Math.random() * freeNeighbors.length)] || null;
         }
@@ -1896,6 +1994,7 @@
         if (!hex) return; // board somehow completely full — extremely unlikely on an 85-hex board
         const apprentice = makeEnemy(u.hp, u.dmg, { role: u.role, atkInterval: u.atkInterval, moveSpeed: u.moveSpeed, weight: u.weight, typeId: u.type, hex });
         if (protectedUnit) apprentice.protectsId = protectedUnit.id; // see shieldedHexKeys
+        else if (hastedUnit) apprentice.hastesId = hastedUnit.id; // see hasteMultFor
         list.push(apprentice);
       }
     });
@@ -2006,9 +2105,18 @@
     effects.push({ type: 'hurricane', x, y, life: 1 });
   }
 
+  // Real-time seconds the whole boomerangThrow flight (start to the return-to-hero end) takes to
+  // decay from life 1 to 0 — 1/rate. Shared by the effect's own decay rate below AND heroAttack's
+  // bounce-damage scheduling (pendingActions), so the two can never drift out of sync with each
+  // other — a bounce's number appearing before/after the icon actually reaches that hex would
+  // undo the whole point of deferring it.
+  const BOOMERANG_THROW_RATE = 1.0;
+
   // The Boomerang's throw — one continuous spinning flight through every waypoint it actually
   // hit (see heroAttack's boomerang block), ending back at the hero. Segment lengths/total are
-  // precomputed once here (points never change after this) rather than every draw frame.
+  // precomputed once here (points never change after this) rather than every draw frame. Returns
+  // them too, so heroAttack can schedule each bounce's damage to land in step with this same
+  // geometry/timing instead of recomputing it.
   function spawnBoomerangThrow(points) {
     const segLens = [];
     let total = 0;
@@ -2017,7 +2125,9 @@
       segLens.push(d);
       total += d;
     }
-    effects.push({ type: 'boomerangThrow', points, segLens, total: total || 1, life: 1 });
+    total = total || 1;
+    effects.push({ type: 'boomerangThrow', points, segLens, total, life: 1 });
+    return { segLens, total };
   }
 
   function hexColorToRgb(hex) {
@@ -2208,19 +2318,6 @@
       if (hero.equippedWeapon === 'duelistblade') hero.advancingBonusActive = false;
     };
 
-    if (isEquipped('executioner') && target.hp / target.maxHp < 0.15) {
-      const executedHp = Math.max(1, Math.round(target.hp));
-      target.hp = 0;
-      target.flash = 1;
-      const p = enemyPos(target);
-      spawnSlash(p.x, p.y);
-      spawnDamageNumber(p.x, p.y - p.r - 10, 'EXECUTED', '#ff6b6b');
-      log('Executed!', 'crit');
-      logDamageDealt('Executioner', executedHp);
-      killEnemyFromHeroAttack(target);
-      return;
-    }
-
     // Spear piercing — only when the target is exactly 2 hexes out (only reachable at all via
     // the Spear's reach) AND there's a single unambiguous hex between hero and it. A hex grid
     // fans out, so an off-axis distance-2 target has two hexes equally "between" it and the
@@ -2291,13 +2388,22 @@
     dmg *= shieldMultAgainst(target.hex); // Mage's Apprentice — half damage if target's shielded and the hero isn't
     dmg = Math.max(1, Math.round(dmg));
 
+    // Executioner — reworked from "already below 15%, the NEXT hit auto-kills" to what Nate
+    // actually wants: if THIS hit would knock the target below the 15% HP threshold without
+    // outright killing them, finish them off instead of leaving a sliver. Only bumps `dmg`
+    // itself (never touches preShieldDmg above), so Boomerang's bounce/Staff's pierce off this
+    // same swing still compute their own damage from the ordinary, un-boosted hit.
+    const executed = isEquipped('executioner') && target.hp - dmg > 0 && (target.hp - dmg) / target.maxHp < 0.15;
+    if (executed) dmg = Math.round(target.hp);
+
     target.hp -= dmg;
     target.flash = 1;
     const p = enemyPos(target);
     spawnSlash(p.x, p.y);
-    spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), isCrit ? '#f0c14b' : '#fff');
-    if (isCrit) log(`Crit! You hit for ${dmg}.`, 'crit');
-    logDamageDealt('Auto Attack', dmg);
+    spawnDamageNumber(p.x, p.y - p.r - 10, executed ? 'EXECUTED' : String(dmg), executed ? '#ff6b6b' : (isCrit ? '#f0c14b' : '#fff'));
+    if (executed) log('Executed!', 'crit');
+    else if (isCrit) log(`Crit! You hit for ${dmg}.`, 'crit');
+    logDamageDealt(executed ? 'Executioner' : 'Auto Attack', dmg);
     applyLifesteal(dmg);
     applyAffixReactions(target, dmg);
     if (weaponDef.id === 'staff') hero.staffStacks = Math.min(STAFF_MAX_STACKS, hero.staffStacks + 1);
@@ -2353,34 +2459,52 @@
     // Fog Patch blocks it too, consistent with every other LOS check in the file). Full damage
     // each bounce, same "no falloff on a multi-hit" precedent Cleave already set for its 3
     // flanking hexes — picks the nearest unvisited candidate each hop, same tie-break (lowest id)
-    // as every other nearest-enemy search in this file.
+    // as every other nearest-enemy search in this file. Chain TARGETING is still decided here,
+    // synchronously, at throw-time (including each bounce's own damage amount/shield check) —
+    // only the actual hp mutation/feedback is deferred, so who gets hit and for how much never
+    // changes, just when it visibly lands. The primary hit above stays instant; deferring it too
+    // would mean rewriting how Executioner/Electric Shock/every other system that reads the
+    // primary target's hp later in this same function assumes it's already applied.
     if (hero.equippedWeapon === 'boomerang') {
       let bounceSource = target;
       const hit = [target];
+      const bounceHits = []; // { enemy, dmg } — damage deferred to land with the throw below
       for (let i = 0; i < 2; i++) {
         const candidates = queue.filter(e => !hit.includes(e) && hexDistance(e.hex, bounceSource.hex) <= 2 && hasLineOfSight(bounceSource.hex, e.hex));
         if (!candidates.length) break;
         candidates.sort((a, b) => hexDistance(a.hex, bounceSource.hex) - hexDistance(b.hex, bounceSource.hex) || a.id - b.id);
         const next = candidates[0];
         hit.push(next);
-        const bounceDmg = Math.max(1, Math.round(preShieldDmg * shieldMultAgainst(next.hex)));
-        next.hp -= bounceDmg;
-        next.flash = 1;
-        const np = enemyPos(next);
-        spawnSlash(np.x, np.y);
-        spawnDamageNumber(np.x, np.y - np.r - 10, String(bounceDmg), '#d4a24c');
-        logDamageDealt('Boomerang Bounce', bounceDmg);
-        applyLifesteal(bounceDmg);
-        applyAffixReactions(next, bounceDmg);
-        if (next.hp <= 0) killEnemyFromHeroAttack(next);
+        bounceHits.push({ enemy: next, dmg: Math.max(1, Math.round(preShieldDmg * shieldMultAgainst(next.hex))) });
         bounceSource = next;
       }
       if (hit.length > 1) log(`The boomerang bounces to ${hit.length - 1} more enem${hit.length - 1 > 1 ? 'ies' : 'y'}!`, 'crit');
       // One continuous spinning throw through every hex it actually hit (hero -> target ->
       // each bounce, in order), then flies back to the hero's hand — a real boomerang return,
-      // purely visual (no second round of damage on the way back).
+      // purely visual (no second round of damage on the way back). Each bounce's damage is
+      // scheduled to land exactly when this same flight's geometry/timing reaches that hex —
+      // Nate's report: the numbers were popping up before the boomerang had visibly arrived.
       const throwStart = heroPixelPos();
-      spawnBoomerangThrow([throwStart, ...hit.map(enemyPos), throwStart]);
+      const { segLens, total } = spawnBoomerangThrow([throwStart, ...hit.map(enemyPos), throwStart]);
+      let cumulative = segLens[0] || 0; // hero -> primary target leg — that hit already landed above
+      bounceHits.forEach(({ enemy, dmg }, i) => {
+        cumulative += segLens[i + 1];
+        pendingActions.push({
+          delay: (cumulative / total) / BOOMERANG_THROW_RATE,
+          apply: () => {
+            if (!queue.includes(enemy)) return; // died some other way while this was in flight
+            enemy.hp -= dmg;
+            enemy.flash = 1;
+            const np = enemyPos(enemy);
+            spawnSlash(np.x, np.y);
+            spawnDamageNumber(np.x, np.y - np.r - 10, String(dmg), '#d4a24c');
+            logDamageDealt('Boomerang Bounce', dmg);
+            applyLifesteal(dmg);
+            applyAffixReactions(enemy, dmg);
+            if (enemy.hp <= 0) killEnemyFromHeroAttack(enemy);
+          },
+        });
+      });
     }
 
     // Electric Shock — every 4th attack, the hit arcs from the struck target to every enemy
@@ -3394,6 +3518,7 @@
     hero.cooldowns = {}; // abilities start fresh each fight, never carrying a head start (or a
                           // deficit) over from the last one
     smokeZones = [];
+    pendingActions = [];
     heroTargetId = null;
     combatStats = { dealt: {}, taken: {}, healed: {} };
     // heroStance deliberately NOT reset here — Nate's explicit ask: Hold should stay selected
@@ -4577,6 +4702,32 @@
     ctx.restore();
   }
 
+  // The Mage's Apprentice's Haste — a light-yellow glow on whichever unit is currently hasted
+  // (see hasteMultFor), same "visible from prep through the whole fight, no separate cleanup"
+  // shape as drawApprenticeShields above, just following a single unit's hex instead of a radius.
+  function drawHasteGlow() {
+    queue.forEach(a => {
+      if (a.typeId !== 'apprentice' || a.hastesId == null) return;
+      const hasted = queue.find(e => e.id === a.hastesId);
+      if (!hasted) return;
+      const p = hexPixelPos(hasted.hex.row, hasted.hex.idx);
+      ctx.save();
+      ctx.fillStyle = 'rgba(240,224,120,0.28)';
+      ctx.strokeStyle = 'rgba(250,238,160,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 180) * 60 * i;
+        const x = p.x + HEX_RADIUS * Math.cos(angle), y = p.y + HEX_RADIUS * Math.sin(angle);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
   // The Staff's beam — Nate's explicit ask: "constant," not a per-hit flash like every other
   // weapon's projectile. Redrawn fresh every render frame straight from live game state (same
   // pattern as drawSmokeZones/drawApprenticeShields) for as long as the hero is actively in
@@ -4895,6 +5046,7 @@
     drawTerrainFeatures();
     drawSmokeZones();
     drawApprenticeShields();
+    drawHasteGlow();
     drawSetupAbilities();
     if (phase === 'combat') { drawTargetHighlight(); drawSideHUD(); }
 
@@ -5420,6 +5572,16 @@
     return (targetShielded && !heroShielded) ? APPRENTICE_SHIELD_DAMAGE_MULT : 1;
   }
 
+  // Mage's Apprentice's fallback when there's no ranged ally to shield (e.g. it spawned into an
+  // all-melee encounter) — Haste the strongest melee unit instead of doing nothing. `.hastesId`
+  // is set once at spawn (see buildQueueFromEncounter), exactly parallel to `.protectsId` above:
+  // computed live from whichever Apprentice still has it, so it stops the instant that Apprentice
+  // dies, with no separate cleanup needed.
+  function hasteMultFor(enemy) {
+    const hasted = queue.some(a => a.typeId === 'apprentice' && a.hastesId === enemy.id);
+    return hasted ? APPRENTICE_HASTE_MULT : 1;
+  }
+
   // Every Debris hex — Debris is walkable, so this isn't for the base occupied set, only for the
   // "smart" pathing pass below, which treats it as if it were blocked so route-finding naturally
   // detours around it when a detour exists at all.
@@ -5618,7 +5780,7 @@
         // the hero (see resolveHeroMovement) — baked into simDt rather than a 3rd param on
         // advanceMoveProgress.
         const slowMult = e.slowTimer > 0 ? e.slowMult : 1;
-        if (!advanceMoveProgress(e, terrainAt(e.hex), simDt * slowMult)) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
+        if (!advanceMoveProgress(e, terrainAt(e.hex), simDt * slowMult * hasteMultFor(e))) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
         const losCheck = n => hasLineOfSight(n, target);
         const isSmart = ENEMY_TYPES[e.typeId] && ENEMY_TYPES[e.typeId].smart;
         // Range used for "how close is close enough" has to reflect the SAME fog-capped range
@@ -5850,6 +6012,15 @@
       smokeZones = smokeZones.filter(z => z.timer > 0);
     }
 
+    // Damage scheduled to land later than the swing that caused it (see heroAttack's Boomerang
+    // block) — same queue.length gate as everything else above, so a pending hit doesn't fire
+    // into an already-cleared fight while the reward modal is up.
+    if (pendingActions.length && queue.length) {
+      pendingActions.forEach(a => a.delay -= simDt);
+      pendingActions.filter(a => a.delay <= 0).forEach(a => a.apply());
+      pendingActions = pendingActions.filter(a => a.delay > 0);
+    }
+
     // Plagued affix — a stacking rot that ticks for the rest of the fight once you've been
     // hit at least once, scaled off whichever enemy last inflicted a stack (see enemyAttack)
     // so it stays threatening at any depth. Stacks reset at the start of every fight (see
@@ -5924,7 +6095,7 @@
       if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
       if (hexDistance(enemy.hex, enemyTarget) > effectiveAtkRange(enemy.hex, enemyBaseRange(enemy), false, enemyTarget)) return; // e.g. fogged — capped to melee regardless of role
       if (!hasLineOfSight(enemy.hex, enemyTarget)) return; // e.g. Ice Wall blocks the shot, not just adjacency
-      enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult; // e.g. Debris slows attacks too, not just movement
+      enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult * hasteMultFor(enemy); // e.g. Debris slows attacks too, not just movement
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
         enemy.atkTimer -= enemy.atkInterval;
         enemyAttack(enemy);
@@ -5952,7 +6123,7 @@
         : e.type === 'shock' ? 4 : e.type === 'mageZap' ? 3 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2
         : e.type === 'fireballBolt' ? 2.8 : e.type === 'fireballBurst' ? 1.0 : e.type === 'hurricane' ? 1.2
         : e.type === 'magicMissileBolt' ? 2.8 : e.type === 'wandOrb' ? 2.8
-        : e.type === 'boomerangThrow' ? 1.0 // slower — needs to stay visible across its whole multi-hop + return flight
+        : e.type === 'boomerangThrow' ? BOOMERANG_THROW_RATE // slower — see its own comment; shared with heroAttack's bounce-damage scheduling
         : e.type === 'falling' ? 0.55 : 2;
       e.life -= dt * rate;
     });
