@@ -868,6 +868,50 @@
       triggerType: 'passive', modifies: ['armor', 'moveSpeed'] },
     { id: 'magicmissile', tier: 'minor', type: 'ability', icon: '\u{2728}', name: 'Magic Missile', desc: `Every ${ABILITY_CFG.magicmissile.cooldown}s, fire 2 bolts at two different enemies for 40% Magic damage each. Ignores line of sight and paths around Ice Wall/Ruins with infinite range — but flies straight over a Chasm.`,
       triggerType: 'ability', scalesWith: ['magic'], frequencyGate: 'cooldown' },
+
+    // ---- Majors + minors added this batch ----
+    { id: 'spectralguardian', tier: 'major', icon: '\u{1F47B}', name: 'Spectral Guardian', desc: 'Summon a Spectral Guardian at the start of each fight, fighting at your side — 30% of your HP, Damage, Armor, and Damage Reduction, but your FULL attack speed and move speed. If it falls, it’s gone for that fight; a fresh one rises next fight.',
+      triggerType: 'passive', scalesWith: ['maxHP', 'dmg', 'armor'] },
+    { id: 'frostbite', tier: 'major', icon: '\u{1F976}', name: 'Frostbite', desc: 'Every hit chills your target, stacking up to 5 times (8% slower each). At 5 stacks, they freeze solid — stunned briefly and shattered for a burst of bonus damage — then the stacks reset.',
+      triggerType: 'onhit', scalesWith: ['dmg'] },
+    { id: 'blinkstrike', tier: 'major', icon: '\u{1F4A8}', name: 'Blink Strike', desc: 'On every kill, blink behind the furthest living enemy and backstab it for 3x damage. If that backstab also kills, it chains again.',
+      triggerType: 'proc', scalesWith: ['dmg'] },
+    { id: 'necromancerspendant', tier: 'major', icon: '\u{26B0}\u{FE0F}', name: "Necromancer's Pendant", desc: 'Whenever an enemy dies, resurrect it at 50% HP to fight for you — up to 1/2/3/4 at once as your Magic reaches 10/20/35/55. The cap is for the whole fight; losing a thrall doesn’t free up its slot.',
+      triggerType: 'proc', scalesWith: ['magic'] },
+    { id: 'riposte', tier: 'major', icon: '\u{1F93A}', name: 'Riposte', desc: 'Every hit you take arms a guaranteed critical hit, plus bonus damage, on your next attack. No cooldown — fires every time.',
+      triggerType: 'reactive', scalesWith: ['dmg'] },
+    { id: 'arcanebarrier', tier: 'major', icon: '\u{1F4A0}', name: 'Arcane Barrier', desc: 'A magic shield equal to 2x your Magic absorbs damage before your HP does. Fully recharges after a few seconds without being hit.',
+      triggerType: 'passive', scalesWith: ['magic'] },
+    { id: 'dreadaura', tier: 'major', icon: '\u{1F608}', name: 'Dread Aura', desc: 'Enemies within 2 hexes of you deal 20% less damage and take 20% more from you — a constant effect, no trigger needed.',
+      triggerType: 'passive' },
+    { id: 'shatterpoint', tier: 'minor', icon: '\u{1F9CA}', name: 'Shatterpoint', desc: 'Every 4th attack chills your target and everything adjacent to it, slowing them 25% for 3s. If Frostbite freezes and kills an enemy while it’s still slowed by this, it explodes, splashing the shatter damage onto nearby enemies too.',
+      triggerType: 'proc', frequencyGate: 'attackSpeed' },
+    { id: 'gallantsgift', tier: 'minor', icon: '\u{1F381}', name: "Gallant's Gift", desc: 'Choose +20 HP, +5 Damage, or +5 Armor when you equip this — unequip it and the bonus vanishes, but you can re-equip and choose again.',
+      triggerType: 'passive' },
+    { id: 'guardiansvigor', tier: 'minor', icon: '\u{1F49A}', name: "Guardian's Vigor", desc: 'Heal 4% of your max HP on any kill. If your Spectral Guardian lands the kill, also heal 15% of the damage it dealt.',
+      triggerType: 'proc', scalesWith: ['maxHP'] },
+    { id: 'killingspree', tier: 'minor', icon: '\u{1FA78}', name: 'Killing Spree', desc: '+15% attack speed for 3s after any kill. If Blink Strike is equipped, kills within its chain stack this bonus instead, up to +75%.',
+      triggerType: 'proc', modifies: ['atkSpeed'] },
+    { id: 'vengefulspirit', tier: 'minor', icon: '\u{1F47F}', name: 'Vengeful Spirit', desc: 'Each hit you take grants +3% damage for 4s, stacking up to 5 times. If Riposte is equipped, each stack also adds bonus damage to its counterattack.',
+      triggerType: 'reactive', modifies: ['dmg'] },
+    { id: 'staticward', tier: 'minor', icon: '\u{1F50B}', name: 'Static Ward', desc: 'Every hit you take zaps the attacker for a burst of Magic damage. If Arcane Barrier is equipped, this becomes a nova hitting every nearby enemy the instant your shield breaks.',
+      triggerType: 'reactive', scalesWith: ['magic'] },
+    { id: 'creepingdread', tier: 'minor', icon: '\u{1F578}\u{FE0F}', name: 'Creeping Dread', desc: 'Enemies within 2 hexes of you slow by 10% every 2s, up to 3 stacks — clears the instant they step away. If Dread Aura is equipped, each stack deepens its damage debuff/amplify by 5%.',
+      triggerType: 'passive' },
+    { id: 'gravepact', tier: 'minor', icon: '\u{1FAA6}', name: 'Grave Pact', desc: '+10 Magic.',
+      triggerType: 'passive', modifies: ['magic'] },
+    { id: 'devotedservants', tier: 'minor', icon: '\u{1F647}', name: 'Devoted Servants', desc: 'Your Spectral Guardian and any resurrected thralls deal 25% more damage.',
+      triggerType: 'passive' },
+    { id: 'recklessabandon', tier: 'minor', icon: '\u{1F4A2}', name: 'Reckless Abandon', desc: '+25% damage while below 50% HP.',
+      triggerType: 'passive', modifies: ['dmg'] },
+    { id: 'focusedmind', tier: 'minor', icon: '\u{1F9E0}', name: 'Focused Mind', desc: '+8% Crit Chance. Physical weapons only.',
+      triggerType: 'passive', unlocksStat: 'critChance' },
+    { id: 'spellbreaker', tier: 'minor', icon: '\u{1FA84}', name: 'Spellbreaker', desc: '+15 Magic.',
+      triggerType: 'passive', modifies: ['magic'] },
+    { id: 'boneward', tier: 'minor', icon: '\u{1F9B4}', name: 'Bone Ward', desc: '+3 Armor for 2.5s per kill, stacking up to 3 times. If Necromancer’s Pendant is equipped, also +3 Armor permanently per currently-alive thrall.',
+      triggerType: 'proc', modifies: ['armor'] },
+    { id: 'overdrive', tier: 'minor', icon: '\u{1F501}', name: 'Overdrive', desc: '5% chance per attack to strike again instantly. If Momentum is equipped, that chance scales with its current stacks, up to +20% more.',
+      triggerType: 'proc', frequencyGate: 'attackSpeed' },
   ];
 
   const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
@@ -957,6 +1001,14 @@
     staff: { id: 'staff', name: 'Staff', icon: '\u{1F52E}', role: 'ranged', magical: true,
       atkSpeedMult: 4,
       desc: `A channeled beam that ramps from weak to devastating the longer you hold it on the same target — ${STAFF_MIN_DMG_MULT}x to ${STAFF_MAX_DMG_MULT}x Magic damage over ${STAFF_MAX_STACKS} hits, resetting if you switch targets. Once fully ramped, the beam pierces through your target, hitting every enemy behind it in a line for 25% less each, until line of sight breaks. Never crits (no magic weapon does).` },
+    // The one AoE weapon in the roster — every other weapon (even Boomerang/Staff's pierce) is
+    // still fundamentally a single-primary-target hit with extras layered on. Farseer's Orb
+    // instead hits EVERY enemy in range each swing, deliberately for very little each (see
+    // triggerFarseerOrb) so it reads as a genuine tradeoff (wide but shallow), not a strictly
+    // better Wand.
+    farseerorb: { id: 'farseerorb', name: "Farseer's Orb", icon: '\u{1F310}', role: 'ranged', magical: true,
+      dmgMult: 0.35,
+      desc: 'A hovering orb that pulses outward with every swing, hitting EVERY enemy in range for a small amount of Magic damage each — wide, not deep. Never crits (no magic weapon does).' },
   };
   const HERO_WEAPON_IDS = Object.keys(HERO_WEAPONS);
   const NON_MAGICAL_WEAPON_IDS = HERO_WEAPON_IDS.filter(id => !HERO_WEAPONS[id].magical);
@@ -1003,6 +1055,9 @@
     // distinct identity from the Staff's purple, even though both share the 'cross' shape.
     wand:         { weaponShape: 'cross', weaponBaseReach: 0.5, weaponLunge: 0.35, weaponBlade: 0.35, weaponWidth: 0.08, weaponTail: 0.02, weaponGuard: 0.03, weaponColor: '#ff4d4d' },
     staff:        { weaponShape: 'cross', weaponBaseReach: 0.55, weaponLunge: 0.3, weaponBlade: 0.85, weaponWidth: 0.09, weaponTail: 0.04, weaponGuard: 0.05, weaponColor: '#b47cff' },
+    // A short, stubby "orb" rather than a real weapon shape — the actual attack visual is the
+    // radiating pulse effect (see spawnFarseerPulse), not this held-item silhouette.
+    farseerorb:   { weaponShape: 'cross', weaponBaseReach: 0.35, weaponLunge: 0.15, weaponBlade: 0.2, weaponWidth: 0.18, weaponTail: 0.02, weaponGuard: 0.02, weaponColor: '#5ce0d8' },
   };
 
   // ---------------- Wave scaling config ----------------
@@ -1193,9 +1248,10 @@
     };
   }
 
-  // TODO(difficulty-scoring): archetypes/affixes are still placeholder numbers authored by
-  // feel, not a real weighted difficulty score — see the design discussion for the full
-  // reasoning on why that's deferred until the core loop settles further.
+  // TODO(difficulty-scoring): archetype/affix COMPOSITION (which units, how many, which affixes
+  // roll) is still placeholder numbers authored by feel, not driven by a weighted score — that
+  // part is still deferred. A real score now exists for REWARDS specifically, though — see
+  // encounterDangerScore/rollReward below, which closes that half of this TODO.
   // LOCKED DIRECTION, still placeholder numbers: how many axes a slot filters on loosens with
   // depth (role drops out first, once depth crosses AXIS_DROP_DEPTH.role) — early fights stay
   // predictable (role+weight both constrain), deep fights can surprise you (e.g. an Archer
@@ -1398,25 +1454,66 @@
     return { hp, dmg };
   }
 
-  // Reward menu kept deliberately minimal for now (gold or talisman) — see roadmap note. Rolled
-  // fully independently of archetype: a Brute fight might hand you a major, or just gold.
-  function rollReward(depth) {
+  // Rough relative weight between HP and DPS in encounterDangerScore below — HP and DPS live on
+  // very different raw scales (tens vs. single digits at depth 1), so DPS_WEIGHT is set to
+  // roughly balance their contribution at that depth, not because damage matters literally 5x
+  // more than health. Only the 3 affixes that add a MECHANIC rather than a stat multiplier get
+  // their own weight — Undying/Bloodlust/Horde's danger is already baked into the resolved
+  // units' hp/dmg/count below (see applyAffixStats/generateEncounterOption), so adding a flat
+  // weight for those too would double-count them.
+  const DANGER_HP_WEIGHT = 1;
+  const DANGER_DPS_WEIGHT = 5;
+  const AFFIX_DANGER = { cursed: 12, vampiric: 10, plagued: 8 };
+
+  // A single "how dangerous is this specific rolled roster" number — total HP and total DPS
+  // across every unit (count included), plus a flat bump per non-stat-modifying affix. Feeds
+  // rollReward below; not used for archetype/affix composition itself (see the TODO above
+  // AXIS_DROP_DEPTH — that half is still placeholder-by-feel).
+  function encounterDangerScore(units, affixes) {
+    let score = 0;
+    units.forEach(u => { score += u.hp * u.count * DANGER_HP_WEIGHT + (u.dmg / u.atkInterval) * u.count * DANGER_DPS_WEIGHT; });
+    affixes.forEach(k => { score += AFFIX_DANGER[k] || 0; });
+    return score;
+  }
+
+  // The yardstick encounterDangerScore gets compared against — NOT a real roster, just "one
+  // medium-weight melee grunt, times 3" scaled to this depth via the exact same growth curves
+  // resolveUnitStats uses, so the ratio below is a stable "how dangerous is this roll relative
+  // to a normal fight at this depth," not an absolute number that keeps climbing with depth.
+  function referenceDangerAtDepth(depth) {
+    const hp = WAVE_CFG.enemyBaseHP * Math.pow(WAVE_CFG.enemyHPGrowth, depth - 1) * WEIGHT_BANDS.medium.hpMult;
+    const dps = (WAVE_CFG.enemyBaseDmg * Math.pow(WAVE_CFG.enemyDmgGrowth, depth - 1)) / WAVE_CFG.enemyAtkInterval;
+    return (hp * DANGER_HP_WEIGHT + dps * DANGER_DPS_WEIGHT) * 3;
+  }
+
+  // Reward menu kept deliberately minimal for now (gold or talisman) — see roadmap note.
+  // `dangerRatio` (encounterDangerScore / referenceDangerAtDepth, computed by the caller —
+  // generateEncounterOption) scales both the talisman odds and the gold amount around what the
+  // old flat numbers already assumed was "normal" danger (ratio === 1 reproduces them exactly).
+  // Clamped to [0.5, 2] — the "acceptable window": even a wildly easy or brutal roll only ever
+  // shifts the reward 2x in either direction, never to a degenerate extreme.
+  function rollReward(depth, dangerRatio) {
+    const r = Math.min(2, Math.max(0.5, dangerRatio));
+    const majorChance = 0.15 * r;
+    const minorChance = 0.30 * r;
     const roll = Math.random();
     let rewardType, rewardTalismanTier = null;
-    if (roll < 0.15) { rewardType = 'talisman'; rewardTalismanTier = 'major'; }
-    else if (roll < 0.45) { rewardType = 'talisman'; rewardTalismanTier = 'minor'; }
+    if (roll < majorChance) { rewardType = 'talisman'; rewardTalismanTier = 'major'; }
+    else if (roll < majorChance + minorChance) { rewardType = 'talisman'; rewardTalismanTier = 'minor'; }
     else rewardType = 'gold';
-    const goldAmount = rewardType === 'gold' ? Math.round(GOLD_CFG.waveClearBase + GOLD_CFG.waveClearPerWave * depth) : 0;
+    const goldAmount = rewardType === 'gold' ? Math.round((GOLD_CFG.waveClearBase + GOLD_CFG.waveClearPerWave * depth) * r) : 0;
     return {
       rewardType, rewardTalismanTier, goldAmount,
       rewardLabel: rewardType === 'gold' ? `+${goldAmount}g` : `${rewardTalismanTier === 'major' ? 'Major' : 'Minor'} Talisman`,
     };
   }
 
-  // Builds one encounter option: an archetype (a roster-selection rule, see ARCHETYPES) plus
-  // an independently-rolled reward and affix set. `units` is a list of {type, count, hp, dmg,
-  // role, atkInterval, weight} groups — buildQueueFromEncounter spawns each group's units onto
-  // the board.
+  // Builds one encounter option: an archetype (a roster-selection rule, see ARCHETYPES) plus a
+  // reward scaled to that specific roster's own danger (see encounterDangerScore/rollReward)
+  // and an independently-rolled affix set. `units` is a list of {type, count, hp, dmg, role,
+  // atkInterval, weight} groups — buildQueueFromEncounter spawns each group's units onto the
+  // board. Returns `dangerRatio` too, so generatePathChoices can re-roll a duplicate reward
+  // using this SAME ratio rather than a fresh one.
   function generateEncounterOption(depth, archetypeKey) {
     const archetype = ARCHETYPES[archetypeKey];
     const groups = composeArchetype(archetypeKey, depth);
@@ -1431,10 +1528,11 @@
     if (affixes.includes('horde') && archetype.hordeEligible) units[0].count += AFFIXES.horde.countDelta;
 
     const totalCount = units.reduce((sum, u) => sum + u.count, 0);
-    const reward = rollReward(depth);
+    const dangerRatio = encounterDangerScore(units, affixes) / referenceDangerAtDepth(depth);
+    const reward = rollReward(depth, dangerRatio);
 
     return Object.assign({
-      type: 'combat', tierKey: archetypeKey, tierLabel: archetype.label, depth, units, affixes,
+      type: 'combat', tierKey: archetypeKey, tierLabel: archetype.label, depth, units, affixes, dangerRatio,
       forceMultiSide: !!archetype.forceMultiSide,
       desc: `${pickArchetypeFlavor(archetypeKey)} (${totalCount} enem${totalCount > 1 ? 'ies' : 'y'})`,
     }, reward);
@@ -1453,7 +1551,19 @@
       return NON_COMBAT_NODE_TYPES.map(r => Object.assign({ type: 'noncombat' }, r));
     }
     const available = ARCHETYPE_KEYS.filter(k => archetypeAvailableAtDepth(k, depth));
-    return shuffle(available).slice(0, 3).map(k => generateEncounterOption(depth, k));
+    const options = shuffle(available).slice(0, 3).map(k => generateEncounterOption(depth, k));
+    // Light de-duplication, not forced diversity — if two cards land on the exact same reward
+    // (type + talisman tier), re-roll the later one ONCE using its own already-computed
+    // dangerRatio (not a fresh one), so a trivial fight can't accidentally get handed a better
+    // reward just to "look different." Only kills the most jarring case (e.g. all 3 showing
+    // gold); an occasional remaining overlap after one re-roll is fine — see the design note.
+    const seen = new Set();
+    options.forEach(opt => {
+      const key = `${opt.rewardType}:${opt.rewardTalismanTier}`;
+      if (seen.has(key)) Object.assign(opt, rollReward(depth, opt.dangerRatio));
+      seen.add(`${opt.rewardType}:${opt.rewardTalismanTier}`);
+    });
+    return options;
   }
 
   // The mandatory floor-capstone fight — not a player choice, always the toughest single
@@ -1505,9 +1615,12 @@
   function weaponRoomPrice(depth) {
     return Math.round(30 + depth * 3);
   }
+  // Sample WITHOUT replacement — the 3 offered items should always be distinct, not duplicates
+  // rolled independently (the old behavior). Farseer's Orb brings MAGICAL_WEAPON_IDS up to 3
+  // entries, so Galdri's can now always show 3 genuinely different items too, same as Camine's.
   function rollWeaponRoomOffer(pool, depth) {
-    return shuffle([0, 1, 2]).map(() => ({
-      weaponId: pool[Math.floor(Math.random() * pool.length)],
+    return shuffle(pool).slice(0, 3).map(weaponId => ({
+      weaponId,
       price: weaponRoomPrice(depth),
       bought: false,
     }));
@@ -1640,6 +1753,17 @@
   // sim-time by simulationStep exactly like every other timer in this file (never the render
   // loop, which stays purely visual) — reset to [] at the start of every fight.
   let pendingActions = [];
+  // Friendly on-board units that fight independently of the hero (Spectral Guardian, Necromancer's
+  // Pendant's thralls) — see makeAlly/resolveAllyCombat. Never persist across fights: reset to []
+  // in both restart() and startFight(), so "no mid-fight Guardian respawn" and "resurrect cap is
+  // total-for-the-fight" both fall out of the reset itself rather than needing enforcement logic.
+  let allies = [];
+  let nextAllyId = 1;
+  let thrallsRaisedThisFight = 0; // Necromancer's Pendant — see tryResurrectAsThrall/necromancerCap
+  // Guards against waveCleared() firing more than once in the same synchronous sweep — Blink
+  // Strike's on-kill chain means killEnemy can recurse into itself, and more than one of those
+  // nested calls could see an empty queue if left unguarded. Reset in startFight().
+  let waveClearFiring = false;
   // Per-fight damage-source tallies, shown in the post-combat summary (see showCombatSummary/
   // gameOver) — reset to empty at the start of every fight so the screen only ever reflects the
   // fight that just ended, not a running lifetime total.
@@ -1733,6 +1857,16 @@
       poisonStacks: 0, plaguedDmgRef: 0, // Plagued affix — see enemyAttack and simulationStep, reset each fight
       decoy: null, // After Image's decoy: { hex, hp, maxHp } while up — see triggerAfterImage, reset each fight
       staffStacks: 0, staffStackTargetId: null, // Staff's ramp — see heroAttack, reset each fight and on a target switch
+      riposteReady: false, riposteBonusBasis: 0, // Riposte — see enemyAttack/heroAttack, reset each fight
+      vengefulStacks: 0, vengefulDecayTimer: 0,  // Vengeful Spirit — see enemyAttack/simulationStep, reset each fight
+      shieldHp: 0, shieldNoHitTimer: 0,          // Arcane Barrier — see enemyAttack/simulationStep, reset each fight
+      boneWardStacks: 0,                          // Bone Ward — see killEnemy/computeStats, reset each fight
+      killingSpreeTimer: 0, killingSpreeStacks: 0, // Killing Spree — see killEnemy/computeStats/simulationStep, reset each fight
+      // Gallant's Gift — which of the 3 stat options was chosen at equip time, or null if never
+      // equipped/chosen yet. Deliberately NOT reset in startFight (it must survive fight-to-fight
+      // exactly like the equip itself) — only cleared on unequip (see toggleEquip) and re-prompted
+      // on the next re-equip.
+      gallantsGiftChoice: null,
     };
   }
 
@@ -1767,6 +1901,17 @@
     const t = TALISMANS.find(x => x.id === id);
     if (!t) return;
     hero.equipped[t.tier] = hero.equipped[t.tier].filter(x => x !== id);
+    // Gallant's Gift — the bonus vanishes immediately on unequip; re-equipping prompts a fresh
+    // choice (see renderLoadoutTab's inline picker) rather than remembering the old pick.
+    if (id === 'gallantsgift') hero.gallantsGiftChoice = null;
+    renderAll();
+  }
+
+  // Gallant's Gift's equip-time choice — picked inline in the Loadout panel (see
+  // renderLoadoutTab) rather than a full modal, since it's just 3 buttons. Re-callable any time
+  // it's equipped with no choice made yet.
+  function chooseGallantsGift(stat) {
+    hero.gallantsGiftChoice = stat;
     renderAll();
   }
 
@@ -1862,6 +2007,29 @@
     if (has('adrenaline')) {
       const missingPct = 1 - hero.hp / maxHP;
       dmg *= (1 + Math.min(0.4, missingPct / 2));
+    }
+    if (has('gravepact')) magic += 10;
+    if (has('spellbreaker')) magic += 15;
+    if (has('focusedmind')) critChance += 0.08;
+    if (has('vengefulspirit')) dmg *= (1 + 0.03 * (hero.vengefulStacks || 0));
+    // Gallant's Gift — whichever stat was chosen at equip time (see toggleEquip/renderLoadoutTab);
+    // null until the player actually picks one.
+    if (has('gallantsgift') && hero.gallantsGiftChoice) {
+      if (hero.gallantsGiftChoice === 'hp') maxHP += 20;
+      else if (hero.gallantsGiftChoice === 'dmg') dmg += 5;
+      else if (hero.gallantsGiftChoice === 'armor') armor += 5;
+    }
+    // Reckless Abandon reads the FINAL maxHP (after every other maxHP-modifying talisman above),
+    // so the 50% threshold matches what's actually shown on the Hero panel.
+    if (has('recklessabandon') && hero.hp < maxHP * 0.5) dmg *= 1.25;
+    // Killing Spree — base is a flat +15% for 3s after any kill (stacks defaults to 1); Blink
+    // Strike's combo (see killEnemy) stacks it up to +75% instead when the kill was part of a chain.
+    if (has('killingspree') && hero.killingSpreeTimer > 0) atkSpeed *= 1 + 0.15 * Math.max(1, hero.killingSpreeStacks || 1);
+    // Bone Ward — stacking kill-armor (read side, see killEnemy) plus a permanent bonus per
+    // currently-alive thrall (Necromancer's Pendant's combo).
+    if (has('boneward')) {
+      armor += 3 * (hero.boneWardStacks || 0);
+      armor += 3 * allies.filter(a => a.kind === 'thrall' && a.hp > 0).length;
     }
     critChance = Math.min(0.75, critChance);
 
@@ -2273,13 +2441,17 @@
     if (best.id !== target.id) heroTargetId = best.id;
   }
 
-  function heroAttack() {
+  function heroAttack(isBonus) {
     if (!currentHeroTarget()) pickHeroTarget();
     const target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
     hero.attackCount++;
     heroLunge = 1;
+
+    // Farseer's Orb hits every enemy in range instead of a single target — its own dedicated
+    // resolution, not the single-target flow below.
+    if (hero.equippedWeapon === 'farseerorb') { triggerFarseerOrb(s); return; }
 
     if (HERO_WEAPON_VISUALS[hero.equippedWeapon].weaponShape === 'crossbow') {
       // Same origin math as the Archer's own bolt (see enemyAttack) — offset forward and to
@@ -2375,11 +2547,29 @@
     // attack) — composes with crit/Overcharge/pierce like any other component of dmg, rather
     // than being tacked on separately afterward, so a crit on an advancing swing is +20, not +10.
     if (hero.equippedWeapon === 'duelistblade' && hero.advancingBonusActive) dmg += 10;
+    // Riposte — consumes the "armed" flag enemyAttack sets on the hit that triggered it (no
+    // cooldown, fires every time you're hit), forcing THIS attack to guaranteed-crit plus a flat
+    // bonus. Vengeful Spirit's stacks (if also equipped) add their own bonus into the same
+    // flat amount, rewarding having taken a few hits before finally countering.
+    const riposteFiring = isEquipped('riposte') && hero.riposteReady;
+    let riposteBonus = 0;
+    if (riposteFiring) {
+      riposteBonus = Math.round(hero.riposteBonusBasis * 0.5);
+      if (isEquipped('vengefulspirit')) riposteBonus += hero.vengefulStacks * 4;
+      hero.riposteReady = false;
+    }
     // Magic weapons never crit — Killer Instinct/crit rolls are a physical-weapon-only mechanic.
-    const isCrit = !weaponDef.magical && Math.random() < s.critChance;
+    const isCrit = riposteFiring || (!weaponDef.magical && Math.random() < s.critChance);
     if (isCrit) dmg *= s.critDamage;
     if (isEquipped('overcharge') && hero.attackCount % 5 === 0) dmg *= 2.5;
     dmg *= targetDmgMult;
+    dmg += riposteBonus;
+    // Dread Aura — targets within 2 hexes of the hero take extra damage; Creeping Dread's stacks
+    // (see simulationStep) deepen this the longer that target's stayed close.
+    if (isEquipped('dreadaura') && hexDistance(heroHex, target.hex) <= 2) {
+      const extra = isEquipped('creepingdread') ? 0.05 * (target.cdStacks || 0) : 0;
+      dmg *= 1 + (0.20 + extra);
+    }
     // Kept PRE-shield for Boomerang's bounces below, which each need their OWN per-hex shield
     // check (a bounce can land on a shielded hex even when the primary target's hex wasn't, or
     // vice versa) rather than inheriting whatever the primary target's shield status happened
@@ -2451,6 +2641,60 @@
     if (hero.equippedWeapon === 'whip') {
       target.slowTimer = 1.5;
       target.slowMult = 0.25;
+    }
+
+    // Shatterpoint — every 4th attack (independent of Frostbite's per-hit chill), send a chill
+    // wave to the target and everything adjacent to it: a movement slow kept in its own field
+    // (shatterSlowTimer/Mult) so it composes with Whip's slow rather than colliding with it.
+    // Deliberately runs BEFORE Frostbite's own block below, so if both happen to trigger on the
+    // exact same swing, Frostbite's "is this target currently slowed by Shatterpoint" check
+    // still sees it.
+    if (isEquipped('shatterpoint') && hero.attackCount % 4 === 0) {
+      const waveTargets = [target].concat(queue.filter(e => e !== target && hexDistance(e.hex, target.hex) <= 1));
+      waveTargets.forEach(e => { e.shatterSlowTimer = 3; e.shatterSlowMult = 0.75; });
+    }
+
+    // Frostbite — every hit chills the target (skipped if this hit already killed it — no point
+    // chilling a corpse), stacking up to 5 (8%/stack, read in resolveEnemyMovement). At 5 stacks,
+    // freeze (a stun, shorter for Miniboss/Boss weight) + a shatter hit for a burst of bonus
+    // damage, then the stacks reset regardless of whether the shatter itself killed.
+    if (isEquipped('frostbite') && target.hp > 0) {
+      target.chillStacks = Math.min(5, (target.chillStacks || 0) + 1);
+      target.chillDecayTimer = 3;
+      if (target.chillStacks >= 5) {
+        const heavy = target.weight === 'miniboss' || target.weight === 'boss';
+        target.stunTimer = Math.max(target.stunTimer || 0, heavy ? 0.75 : 1.5);
+        const shatterDmg = Math.max(1, Math.round(s.dmg * shieldMultAgainst(target.hex)));
+        target.hp -= shatterDmg;
+        target.flash = 1;
+        spawnSlash(p.x, p.y);
+        spawnDamageNumber(p.x, p.y - p.r - 30, String(shatterDmg), '#9fe0ff');
+        log('The target shatters in a burst of frost!', 'crit');
+        logDamageDealt('Frostbite', shatterDmg);
+        applyLifesteal(shatterDmg);
+        applyAffixReactions(target, shatterDmg);
+        // Shatterpoint's combo — the shatter itself must be a KILL, and the target must still be
+        // slowed by Shatterpoint's OWN chill wave (not just Frostbite's chill stacks), for the
+        // splash to fire. Target's own death is still caught by the shared kill-check at the
+        // bottom of this function (same as Executioner) — only the OTHER splash targets need
+        // their own kill call here, to avoid double-killing `target`.
+        if (target.hp <= 0 && isEquipped('shatterpoint') && target.shatterSlowTimer > 0) {
+          queue.filter(e => e !== target && hexDistance(e.hex, target.hex) <= 1).forEach(e => {
+            const splashDmg = Math.max(1, Math.round(shatterDmg * shieldMultAgainst(e.hex)));
+            e.hp -= splashDmg;
+            e.flash = 1;
+            const ep = enemyPos(e);
+            spawnSlash(ep.x, ep.y);
+            spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(splashDmg), '#9fe0ff');
+            logDamageDealt('Shatterpoint', splashDmg);
+            applyLifesteal(splashDmg);
+            applyAffixReactions(e, splashDmg);
+          });
+          queue.filter(e => e !== target && e.hp <= 0).forEach(killEnemyFromHeroAttack);
+        }
+        target.chillStacks = 0;
+        target.chillDecayTimer = 0;
+      }
     }
 
     // Boomerang — after the primary hit, bounces to up to 2 MORE distinct enemies, each within
@@ -2547,6 +2791,15 @@
     }
 
     if (target.hp <= 0) killEnemyFromHeroAttack(target);
+
+    // Overdrive — a flat chance to strike again immediately; the isBonus guard on this recursive
+    // call stops the bonus swing from re-rolling Overdrive itself (no runaway chains). Momentum's
+    // combo (if also equipped) scales the chance with its current stack count.
+    if (!isBonus && isEquipped('overdrive')) {
+      let chance = 0.05;
+      if (isEquipped('momentum')) chance += 0.01 * Math.min(MOMENTUM_MAX_STACKS, hero.talismanStacks.momentum || 0);
+      if (Math.random() < chance) heroAttack(true);
+    }
   }
 
   // Not a whirlwind — a 3-hex swing: the hex the hero is currently attacking, plus whichever
@@ -2789,6 +3042,41 @@
     targets.filter(e => e.hp <= 0).forEach(killEnemy);
   }
 
+  // Farseer's Orb — every swing hits EVERY enemy within range+LOS for a small amount of Magic
+  // damage each, instead of the usual single-primary-target flow. Its own dedicated resolution
+  // (called from heroAttack's early-return branch), deliberately NOT threading through
+  // Executioner/Frostbite/Riposte/Electric Shock/Duelist's Blade/Spear/Boomerang/Staff — those
+  // are either single-target-specific or mutually exclusive with this weapon by construction;
+  // Overcharge (a general proc, not weapon-specific) still applies since it's just a flat
+  // multiplier with no per-target bookkeeping to complicate.
+  function triggerFarseerOrb(s) {
+    const heroP = heroPixelPos();
+    spawnShockwaveRing(heroP.x, heroP.y);
+    const trueSight = isEquipped('truesight');
+    const targets = queue.filter(e => hexDistance(heroHex, e.hex) <= s.atkRange && hasLineOfSight(heroHex, e.hex, trueSight));
+    if (!targets.length) return;
+    let baseDmg = Math.max(1, Math.round(s.magic * (HERO_WEAPONS.farseerorb.dmgMult || 1)));
+    if (isEquipped('overcharge') && hero.attackCount % 5 === 0) baseDmg = Math.round(baseDmg * 2.5);
+    targets.forEach(e => {
+      let hitDmg = baseDmg;
+      if (isEquipped('dreadaura') && hexDistance(heroHex, e.hex) <= 2) {
+        const extra = isEquipped('creepingdread') ? 0.05 * (e.cdStacks || 0) : 0;
+        hitDmg *= 1 + (0.20 + extra);
+      }
+      hitDmg = Math.max(1, Math.round(hitDmg * shieldMultAgainst(e.hex)));
+      e.hp -= hitDmg;
+      e.flash = 1;
+      const ep = enemyPos(e);
+      spawnSlash(ep.x, ep.y);
+      spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(hitDmg), '#5ce0d8');
+      logDamageDealt("Farseer's Orb", hitDmg);
+      applyLifesteal(hitDmg);
+      applyAffixReactions(e, hitDmg);
+    });
+    log(`Farseer's Orb pulses, striking ${targets.length} enem${targets.length > 1 ? 'ies' : 'y'}.`, 'crit');
+    queue.filter(e => e.hp <= 0).forEach(e => killEnemy(e));
+  }
+
   // Hurricane's Might's Push destination — picks the hex on the ring one step FARTHER from
   // `aroundHex` that's angularly closest to "the unit's current angle, rotated by
   // PUSH_ROTATION_RADIANS." Real pixel angles rather than a direction-index lookup, since this
@@ -2826,7 +3114,7 @@
     // Credit the HP it had right before the fall as Hurricane's Might "damage" for the post-combat
     // summary only — intentionally NOT routed through applyLifesteal, since nothing actually hit it.
     logDamageDealt("Hurricane's Might", enemy.hp);
-    killEnemy(enemy);
+    killEnemy(enemy, { resurrectable: false }); // no corpse left for Necromancer's Pendant to raise
   }
 
   // Hurricane's Might — every enemy within HURRICANE_RADIUS hexes gets pushed to the ring one
@@ -2908,23 +3196,66 @@
     }
   }
 
-  function killEnemy(enemy) {
+  function killEnemy(enemy, meta) {
+    const info = meta || {};
     const s = computeStats();
     const goldGain = Math.round((GOLD_CFG.perKillBase + GOLD_CFG.perKillPerWave * wave + s.bonusGoldPerKill) * s.goldMult);
     gold += goldGain;
     log(`Defeated ${enemy.isBoss ? 'the boss' : 'an enemy'} (+${goldGain}g).`);
+
+    // Guardian's Vigor — heals on ANY kill; the Guardian-specific +15%-of-damage-dealt bonus only
+    // applies when info.killerAlly is specifically the Guardian (only allyAttack ever sets
+    // killerAlly, and only when that ally's own kind is 'guardian', never a thrall's).
+    if (isEquipped('guardiansvigor')) {
+      let heal = s.maxHP * 0.04;
+      if (info.killerAlly && info.killerAlly.kind === 'guardian') heal += info.killDmg * 0.15;
+      const before = hero.hp;
+      hero.hp = Math.min(s.maxHP, hero.hp + heal);
+      logHealing("Guardian's Vigor", hero.hp - before);
+    }
+    // Bone Ward — stacking +3 Armor on any kill for the rest of THIS fight (read side, plus its
+    // "+3 per currently-alive thrall" half, lives in computeStats).
+    if (isEquipped('boneward')) hero.boneWardStacks = (hero.boneWardStacks || 0) + 1;
+    // Killing Spree — base is a flat refresh (stacks reset to 1, not accumulate); a kill that's
+    // part of a Blink Strike chain (info.viaBlinkChain, set only by triggerBlinkStrike's own
+    // recursive call) stacks instead, up to 5 (= +75%, see computeStats).
+    if (isEquipped('killingspree')) {
+      const viaChain = info.viaBlinkChain && isEquipped('blinkstrike');
+      hero.killingSpreeStacks = viaChain ? Math.min(5, (hero.killingSpreeStacks || 0) + 1) : 1;
+      hero.killingSpreeTimer = 3;
+    }
+
+    // Necromancer's Pendant — MUST run before the splice below: this is the only place that
+    // still has enemy.hp/maxHp/damage/typeId/hex/atkInterval/moveSpeed/weight before they're gone
+    // for good. `info.resurrectable !== false` lets a kill with no real corpse (e.g. a Chasm
+    // fall) opt out.
+    if (info.resurrectable !== false && isEquipped('necromancerspendant')) tryResurrectAsThrall(enemy);
+
     const idx = queue.indexOf(enemy);
     if (idx !== -1) queue.splice(idx, 1);
     if (heroTargetId === enemy.id) heroTargetId = null; // force a fresh pick next attack
-    if (queue.length === 0) {
+
+    // Blink Strike — on ANY kill (hero, ability, ally, Thorns/Static Ward reflect, all of it),
+    // blink behind the furthest living enemy and backstab it. Reads the queue AFTER the splice
+    // above, so it never re-targets the enemy just removed. A kill this itself causes recurses
+    // right back into this same function — naturally bounded, since each hop consumes one more
+    // enemy from an already-shrinking queue, so no separate recursion-depth guard is needed.
+    if (isEquipped('blinkstrike') && queue.length) triggerBlinkStrike();
+
+    // waveClearFiring guards against a Blink Strike chain causing more than one nested killEnemy
+    // call to see an empty queue and fire waveCleared() twice.
+    if (queue.length === 0 && !waveClearFiring) {
+      waveClearFiring = true;
       waveCleared();
     }
     renderTopbar();
   }
 
-  function enemyAttack(enemy) {
+  function enemyAttack(enemy, target) {
     const s = computeStats();
-    enemy.lunge = 1; // lunges toward the hero even on a miss — it still took the swing
+    enemy.lunge = 1; // lunges toward its target even on a miss — it still took the swing
+    target = target || { kind: 'hero', hex: aggroHex() };
+    if (target.kind === 'ally') { enemyAttackAlly(enemy, target.ref); return; }
     // While an After Image decoy is up, every enemy currently eligible to attack this tick got
     // there via aggroHex() resolving to the decoy's hex (see simulationStep) — so if the decoy
     // exists at all, this attack is aimed at it, not the real hero.
@@ -2952,13 +3283,22 @@
       log('You dodged the attack!', 'dodge');
       return;
     }
+    // Dread Aura — enemies within 2 hexes of the hero's OWN hex (not the decoy — the aura is
+    // about the hero's own presence) deal less damage. Creeping Dread's stacks (see
+    // simulationStep) deepen this the longer an enemy has stayed close.
+    let dreadMult = 1;
+    if (isEquipped('dreadaura') && hexDistance(enemy.hex, heroHex) <= 2) {
+      const extra = isEquipped('creepingdread') ? 0.05 * (enemy.cdStacks || 0) : 0;
+      dreadMult = 1 - (0.20 + extra);
+    }
     // Armor subtracts flat first; Damage Reduction % (a separate unlocked stat, see Iron
     // Resolve/Kinetic Ward) then takes a cut of whatever's left — two distinct mitigation layers.
-    let dmg = Math.max(1, Math.round((enemy.damage - s.armor) * (1 - s.damageReductionPct)));
+    let dmg = Math.max(1, Math.round((enemy.damage * dreadMult - s.armor) * (1 - s.damageReductionPct)));
 
     if (decoy) {
       // The decoy is a conjured illusion, not the hero's own flesh — hits against it never
-      // apply Plagued stacks, Thorns reflect, or the real death check.
+      // apply Plagued stacks, Thorns/Static Ward reflect, Arcane Barrier absorption, Riposte/
+      // Vengeful Spirit arming, or the real death check.
       decoy.hp -= dmg;
       spawnSplash(targetPos.x, targetPos.y - 10);
       spawnDamageNumber(targetPos.x, targetPos.y - 45, String(dmg), '#e06666');
@@ -2969,11 +3309,36 @@
       return;
     }
 
-    hero.hp -= dmg;
-    heroFlash = 1;
-    spawnSplash(targetPos.x, targetPos.y - 10);
-    spawnDamageNumber(targetPos.x, targetPos.y - 45, String(dmg), '#e06666');
-    logDamageTaken(enemyDamageLabel(enemy), dmg);
+    // Arcane Barrier — absorbs before hero.hp; Static Ward's combo hooks the exact tick the
+    // shield breaks (see below), so this has to run before hero.hp is touched.
+    let shieldBefore = 0, shieldAfter = 0;
+    if (isEquipped('arcanebarrier')) {
+      shieldBefore = hero.shieldHp;
+      const absorbed = Math.min(hero.shieldHp, dmg);
+      hero.shieldHp -= absorbed;
+      dmg -= absorbed;
+      shieldAfter = hero.shieldHp;
+      hero.shieldNoHitTimer = 0;
+    }
+
+    if (dmg > 0) {
+      hero.hp -= dmg;
+      heroFlash = 1;
+      spawnSplash(targetPos.x, targetPos.y - 10);
+      spawnDamageNumber(targetPos.x, targetPos.y - 45, String(dmg), '#e06666');
+      logDamageTaken(enemyDamageLabel(enemy), dmg);
+    }
+
+    // Riposte — every hit taken arms a guaranteed-crit, bonus-damage counter on the hero's NEXT
+    // attack (see heroAttack). Refreshes rather than stacks, same convention as stunTimer/
+    // slowTimer elsewhere in this file.
+    if (isEquipped('riposte')) { hero.riposteReady = true; hero.riposteBonusBasis = dmg; }
+    // Vengeful Spirit — stacking damage buff for getting hit, independent of Riposte (Riposte's
+    // own bonus reads these stacks too when both are equipped — see heroAttack).
+    if (isEquipped('vengefulspirit')) {
+      hero.vengefulStacks = Math.min(5, hero.vengefulStacks + 1);
+      hero.vengefulDecayTimer = 4;
+    }
 
     const affixes = (chosenEncounter && chosenEncounter.affixes) || [];
     // Poison scales off whichever specific enemy inflicted the stack (its own already
@@ -2991,8 +3356,50 @@
       logDamageDealt('Thorns', refl);
       if (enemy.hp <= 0) { killEnemy(enemy); return; }
     }
+    // Static Ward — base: a small single-target zap on every hit taken. Suppressed when Arcane
+    // Barrier is also equipped, in favor of the shield-break nova below instead.
+    if (isEquipped('staticward') && !isEquipped('arcanebarrier')) {
+      const refl = Math.round(s.magic * 0.2);
+      enemy.hp -= refl;
+      enemy.flash = 1;
+      logDamageDealt('Static Ward', refl);
+      if (enemy.hp <= 0) { killEnemy(enemy); return; }
+    }
+    // Static Ward's combo — fires once, exactly on the tick the shield goes from having HP to
+    // having none (not "is currently empty," which would refire on every subsequent hit at 0).
+    if (isEquipped('staticward') && isEquipped('arcanebarrier') && shieldBefore > 0 && shieldAfter <= 0) {
+      triggerStaticWardNova(s);
+    }
 
     checkHeroDeath();
+  }
+
+  // Enemy-vs-ally damage resolution — deliberately excludes every hero-only reaction (dodge
+  // chance, Dread Aura, Plagued stacks, Thorns/Static Ward reflect, Arcane Barrier, Riposte/
+  // Vengeful Spirit, checkHeroDeath): none of those make sense against a summoned/reanimated
+  // ally with its own flat hp pool, not the hero's stat block.
+  function enemyAttackAlly(enemy, ally) {
+    const targetPos = hexPixelPos(ally.hex.row, ally.hex.idx);
+    const visuals = ENEMY_VISUALS[enemy.typeId] || {};
+    if (visuals.weaponShape === 'crossbow') {
+      const ep = enemyPos(enemy);
+      const facing = Math.atan2(targetPos.y - ep.y, targetPos.x - ep.x);
+      const localX = ep.r * (visuals.weaponBaseReach ?? 0.5);
+      const localY = ep.r * WEAPON_SIDE;
+      const originX = ep.x + localX * Math.cos(facing) - localY * Math.sin(facing);
+      const originY = ep.y + localX * Math.sin(facing) + localY * Math.cos(facing);
+      spawnBolt(originX, originY, targetPos.x, targetPos.y);
+    }
+    if (enemy.typeId === 'mage') {
+      const ep = enemyPos(enemy);
+      spawnMageZap(ep.x, ep.y, targetPos.x, targetPos.y);
+    }
+    const dmg = Math.max(1, Math.round((enemy.damage - ally.armor) * (1 - ally.damageReductionPct)));
+    ally.hp -= dmg;
+    ally.flash = 1;
+    spawnSplash(targetPos.x, targetPos.y - 10);
+    spawnDamageNumber(targetPos.x, targetPos.y - 45, String(dmg), '#e06666');
+    if (ally.hp <= 0) killAlly(ally);
   }
 
   // Shared by every source of hero damage that can kill (enemy hits, Cursed's reflect,
@@ -3524,7 +3931,20 @@
     // heroStance deliberately NOT reset here — Nate's explicit ask: Hold should stay selected
     // fight after fight until he manually switches back to Advance, not silently revert the
     // instant a new fight starts. It only resets on a full New Attempt (see restart()).
+    // Allies never persist across fights — no mid-fight Guardian respawn and Necromancer's
+    // Pendant's total-for-the-fight cap both fall out of this reset rather than needing their
+    // own enforcement logic.
+    allies = [];
+    thrallsRaisedThisFight = 0;
+    waveClearFiring = false;
+    hero.riposteReady = false; hero.riposteBonusBasis = 0;
+    hero.vengefulStacks = 0; hero.vengefulDecayTimer = 0;
+    hero.shieldHp = isEquipped('arcanebarrier') ? computeStats().magic * 2 : 0;
+    hero.shieldNoHitTimer = 0;
+    hero.boneWardStacks = 0;
+    hero.killingSpreeTimer = 0; hero.killingSpreeStacks = 0;
     phase = 'combat';
+    if (isEquipped('spectralguardian')) spawnSpectralGuardian();
     log(`Encounter begins: ${chosenEncounter.desc}`, 'wave');
     renderAll();
   }
@@ -4085,6 +4505,26 @@
         slotsWrap.appendChild(chip);
       }
       el.appendChild(slotsWrap);
+      // Gallant's Gift's equip-time choice — shows right under the slots the instant it's
+      // equipped with no pick made yet; vanishes once chosen (see chooseGallantsGift) or if
+      // it's unequipped (see unequipTalisman, which nulls the choice back out).
+      if (hero.equipped[tier].includes('gallantsgift') && !hero.gallantsGiftChoice) {
+        const pickWrap = document.createElement('div');
+        pickWrap.className = 'slotRow';
+        pickWrap.style.marginTop = '4px';
+        const label = document.createElement('span');
+        label.className = 'empty';
+        label.textContent = "Gallant's Gift — choose a bonus: ";
+        pickWrap.appendChild(label);
+        [['hp', '+20 HP'], ['dmg', '+5 Damage'], ['armor', '+5 Armor']].forEach(([stat, text]) => {
+          const btn = document.createElement('span');
+          btn.className = 'talismanChip slotChip tier-minor';
+          btn.textContent = text;
+          btn.addEventListener('click', () => chooseGallantsGift(stat));
+          pickWrap.appendChild(btn);
+        });
+        el.appendChild(pickWrap);
+      }
     });
 
     const bagHeader = document.createElement('div');
@@ -5091,6 +5531,31 @@
       drawHealthBar(dp.x, Math.max(6, dp.y - HERO_RADIUS - 16), 60, hero.decoy.hp / hero.decoy.maxHp, '#8fa8c9');
     }
 
+    // Allies (Spectral Guardian, Necromancer's Pendant thralls) — Guardian drawn translucent
+    // ("spectral," no ENEMY_VISUALS entry — bare fists) like the decoy above; a thrall reuses the
+    // dead enemy's own ENEMY_VISUALS weapon shape (so a resurrected Archer thrall still visibly
+    // fires a crossbow) with a lighter tint to read as reanimated rather than illusory.
+    if (allies.length) {
+      allies.forEach(ally => {
+        const p = enemyPos(ally);
+        const shake = ally.flash > 0 ? (Math.random() - 0.5) * 6 * ally.flash : 0;
+        const target = nearestEnemyTo(ally.hex);
+        const facePos = target ? enemyPos(target) : p;
+        const lungeOff = lungeOffset(p.x, p.y, facePos.x, facePos.y, ally.lunge);
+        const angle = Math.atan2(facePos.y - p.y, facePos.x - p.x);
+        const atkProgress = Math.min(1, (ally.atkTimer + simExtrapolation) / ally.atkInterval);
+        const visuals = ally.kind === 'guardian'
+          ? { weaponShape: 'cross', weaponBlade: 0.1, weaponWidth: 0.06, weaponColor: '#cfe8ff', noHead: false }
+          : (ENEMY_VISUALS[ally.typeId] || {});
+        const color = ally.kind === 'guardian' ? '#7ecbff' : '#7fbf7f';
+        ctx.save();
+        ctx.globalAlpha = ally.kind === 'guardian' ? 0.5 : 0.85;
+        drawFacingUnit(p.x + shake + lungeOff.x, p.y + lungeOff.y, p.r, angle, color, false, atkProgress, { ...visuals, hitProgress: ally.flash });
+        ctx.restore();
+        drawHealthBar(p.x, Math.max(6, p.y - p.r - 10), p.r * 2.2, ally.hp / ally.maxHp, ally.kind === 'guardian' ? '#8fa8c9' : '#8fd98f');
+      });
+    }
+
     // Enemies — each sits on its own hex; color reflects role (melee/reach/ranged) so it's
     // visible at a glance which threats are closing in and which are already dug in at range.
     // Rendered during 'prepping'/'beginnerPrep' too, since the queue is now built the moment
@@ -5738,6 +6203,207 @@
     });
   }
 
+  // ---------------- Ally combat (Spectral Guardian, Necromancer's Pendant thralls) ----------------
+  // Friendly units that fight independently of the hero. Movement stays fully separate from
+  // enemy movement/targeting below — resolveEnemyMovement/aggroHex are completely unchanged;
+  // allies pick their own nearest enemy and path/attack it with the same shared primitives
+  // (findStepToward/advanceMoveProgress) everything else on the board already uses. Enemies never
+  // path TOWARD an ally — they only ever end up attacking one opportunistically, when it's
+  // already closer than the hero/decoy from wherever the enemy's own approach put it (see
+  // simulationStep's per-enemy attack-target selection).
+  function makeAlly(kind, hex, hp, damage, opts) {
+    const o = opts || {};
+    return {
+      id: nextAllyId++, kind, hex, hp, maxHp: hp, damage,
+      armor: o.armor || 0, damageReductionPct: o.damageReductionPct || 0,
+      atkInterval: o.atkInterval || 1, atkRange: o.atkRange || 1,
+      atkTimer: Math.random() * 0.4, moveSpeed: o.moveSpeed || HERO_MOVE_SPEED, moveProgress: 0,
+      typeId: o.typeId || null, weight: o.weight || 'medium', flash: 0, lunge: 0,
+    };
+  }
+
+  function nearestEnemyTo(hex) {
+    let best = null, bestDist = Infinity;
+    queue.forEach(e => {
+      const d = hexDistance(hex, e.hex);
+      if (!best || d < bestDist || (d === bestDist && e.id < best.id)) { best = e; bestDist = d; }
+    });
+    return best;
+  }
+
+  // The one and only place ally damage is computed — Devoted Servants' +25% multiplies here and
+  // nowhere else. Routes any kill through the shared killEnemy so an ally-finished enemy is
+  // exactly as resurrectable/gold-granting/wave-clear-checked as a hero-finished one.
+  function allyAttack(ally, target) {
+    ally.lunge = 1;
+    let dmg = ally.damage;
+    if (isEquipped('devotedservants')) dmg *= 1.25;
+    dmg = Math.max(1, Math.round(dmg * shieldMultAgainst(target.hex)));
+    target.hp -= dmg;
+    target.flash = 1;
+    const p = enemyPos(target);
+    spawnSlash(p.x, p.y);
+    spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), ally.kind === 'guardian' ? '#9fd7ff' : '#a0e0a0');
+    logDamageDealt(ally.kind === 'guardian' ? 'Guardian' : 'Thrall', dmg);
+    if (target.hp <= 0) killEnemy(target, { killerAlly: ally, killDmg: dmg });
+  }
+
+  function killAlly(ally) {
+    const idx = allies.indexOf(ally);
+    if (idx !== -1) allies.splice(idx, 1);
+    log(`Your ${ally.kind === 'guardian' ? 'Guardian' : 'thrall'} falls.`, 'wave');
+  }
+
+  // Called from simulationStep right after resolveEnemyMovement — same tick ordering as every
+  // other movement/attack pass in the file.
+  function resolveAllyCombat(simDt) {
+    if (!allies.length) return;
+    const occupied = new Set([hexKey(heroHex.row, heroHex.idx)]);
+    if (hero.decoy) occupied.add(hexKey(hero.decoy.hex.row, hero.decoy.hex.idx));
+    queue.forEach(e => occupied.add(hexKey(e.hex.row, e.hex.idx)));
+    terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx)));
+    allies.forEach(a => occupied.add(hexKey(a.hex.row, a.hex.idx)));
+
+    allies.slice().forEach(ally => {
+      if (!allies.includes(ally)) return; // an earlier ally's kill this same tick could have removed a later one only via killAlly, which never touches this array directly — defensive, matches the queue.slice()/queue.includes() guard shape used everywhere else in this file
+      const target = nearestEnemyTo(ally.hex);
+      if (!target) return; // nothing left to fight (e.g. the last enemy just died this same tick) — idles
+
+      const inRange = hexDistance(ally.hex, target.hex) <= ally.atkRange && hasLineOfSight(ally.hex, target.hex);
+      if (!inRange) {
+        if (advanceMoveProgress(ally, terrainAt(ally.hex), simDt)) {
+          const losCheck = n => hasLineOfSight(n, target.hex);
+          const step = findStepToward(ally.hex, target.hex, ally.atkRange, occupied, losCheck);
+          if (step) {
+            occupied.delete(hexKey(ally.hex.row, ally.hex.idx));
+            ally.hex = step;
+            occupied.add(hexKey(step.row, step.idx));
+          }
+        }
+        return; // same "no burst on arrival" rule as hero/enemies — don't also attack the tick it steps into range
+      }
+
+      ally.atkTimer += simDt;
+      while (ally.atkTimer >= ally.atkInterval && phase === 'combat' && allies.includes(ally)) {
+        ally.atkTimer -= ally.atkInterval;
+        // Re-picked every swing (not the `target` captured above) — mirrors heroAttack's own
+        // currentHeroTarget()/pickHeroTarget() re-fetch each iteration, so an earlier swing this
+        // same tick that already killed `target` doesn't waste a second hit on a corpse.
+        const liveTarget = nearestEnemyTo(ally.hex);
+        if (!liveTarget || hexDistance(ally.hex, liveTarget.hex) > ally.atkRange || !hasLineOfSight(ally.hex, liveTarget.hex)) break;
+        allyAttack(ally, liveTarget);
+      }
+    });
+  }
+
+  function pickGuardianSpawnHex() {
+    const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
+    terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx)));
+    return neighborsOf(heroHex.row, heroHex.idx).find(h => !occupied.has(hexKey(h.row, h.idx))) || null;
+  }
+
+  // Spectral Guardian — 30% of the hero's HP/damage/Armor/Damage Reduction%, but its FULL attack
+  // speed and move speed (unscaled), so it keeps pace and stays genuinely functional rather than
+  // decorative. Melee punches — no ENEMY_VISUALS weapon shape. No mid-fight respawn if it dies;
+  // a fresh one spawns next fight if still equipped (see startFight).
+  function spawnSpectralGuardian() {
+    const hex = pickGuardianSpawnHex();
+    if (!hex) return; // no open adjacent hex at fight start — vanishingly rare, just skips spawning this fight
+    const s = computeStats();
+    allies.push(makeAlly('guardian', hex, Math.max(1, Math.round(s.maxHP * 0.3)), Math.max(1, Math.round(s.dmg * 0.3)), {
+      armor: s.armor * 0.3,
+      damageReductionPct: s.damageReductionPct,
+      atkInterval: 1 / s.atkSpeed,
+      atkRange: 1,
+      moveSpeed: hero.moveSpeed * s.moveSpeedMult,
+      typeId: null,
+      weight: 'medium',
+    }));
+    log('A Spectral Guardian rises at your side.', 'wave');
+  }
+
+  // Necromancer's Pendant — [minMagic, cap] pairs, checked highest-first. Maxed Legacy alone (30
+  // Magic) caps at 2; reaching 3 or 4 requires real talisman investment (Grave Pact/Spellbreaker).
+  const NECROMANCER_THRESHOLDS = [[55, 4], [35, 3], [20, 2], [10, 1]];
+  function necromancerCap(magic) {
+    const hit = NECROMANCER_THRESHOLDS.find(([min]) => magic >= min);
+    return hit ? hit[1] : 0;
+  }
+
+  // thrallsRaisedThisFight is a TOTAL-for-the-fight cap, not "concurrent slots" — never refilled
+  // by a later thrall dying (see killAlly, which only ever removes from `allies`, never touches
+  // this counter). A thrall dying goes through killAlly, never killEnemy, so "a thrall can never
+  // itself be re-resurrected" needs no explicit rule — there's simply no code path that could do it.
+  function tryResurrectAsThrall(enemy) {
+    if (thrallsRaisedThisFight >= necromancerCap(computeStats().magic)) return;
+    thrallsRaisedThisFight++;
+    allies.push(makeAlly('thrall', { ...enemy.hex }, Math.max(1, Math.round(enemy.maxHp * 0.5)), enemy.damage, {
+      atkInterval: enemy.atkInterval,
+      atkRange: enemyBaseRange(enemy),
+      moveSpeed: enemy.moveSpeed,
+      typeId: enemy.typeId,
+      weight: enemy.weight,
+    }));
+    log('The fallen enemy rises again, bound to your will!', 'wave');
+  }
+
+  // Blink Strike — hooked from killEnemy's tail (see there): on any kill, teleport the hero
+  // adjacent to the furthest living enemy and backstab it for 3x damage. If that kill itself
+  // fires this same hook again, it chains — bounded naturally by the shrinking queue.
+  function triggerBlinkStrike() {
+    let furthest = null, bestDist = -1;
+    queue.forEach(e => {
+      const d = hexDistance(heroHex, e.hex);
+      if (d > bestDist || (d === bestDist && furthest && e.id < furthest.id)) { bestDist = d; furthest = e; }
+    });
+    if (!furthest) return;
+    const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
+    allies.forEach(a => occupied.add(hexKey(a.hex.row, a.hex.idx)));
+    const blocked = terrainBlockingHexes();
+    const hex = neighborsOf(furthest.hex.row, furthest.hex.idx)
+      .find(h => !occupied.has(hexKey(h.row, h.idx)) && !blocked.some(t => t.row === h.row && t.idx === h.idx));
+    if (!hex) return; // no open hex beside it to blink to — fizzles harmlessly
+    heroHex = hex;
+    hero.advancingBonusActive = true; // teleporting counts as movement, same convention resolveHeroMovement uses
+    const s = computeStats();
+    const dmg = Math.max(1, Math.round(s.dmg * 3 * shieldMultAgainst(furthest.hex)));
+    furthest.hp -= dmg;
+    furthest.flash = 1;
+    const p = enemyPos(furthest);
+    spawnSlash(p.x, p.y);
+    spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), '#ff6ba3');
+    log(`Blink Strike backstabs for ${dmg}!`, 'crit');
+    logDamageDealt('Blink Strike', dmg);
+    applyLifesteal(dmg);
+    applyAffixReactions(furthest, dmg);
+    if (furthest.hp <= 0) {
+      if (hero.equippedWeapon === 'duelistblade') hero.advancingBonusActive = false;
+      killEnemy(furthest, { viaBlinkChain: true });
+    }
+  }
+
+  // Static Ward's Arcane Barrier combo — fires once, right as the shield breaks (see
+  // enemyAttack). Nova damage scales off the shield's own max size, not a flat Magic read, so it
+  // stays proportional to how big a barrier the build actually has.
+  function triggerStaticWardNova(s) {
+    const shieldMax = s.magic * 2;
+    const novaDmg = Math.round(shieldMax * 0.5);
+    const hp = heroPixelPos();
+    log('Your shield shatters in a burst of arcane static!', 'crit');
+    queue.filter(e => hexDistance(e.hex, heroHex) <= 2).forEach(e => {
+      const dmg = Math.max(1, Math.round(novaDmg * shieldMultAgainst(e.hex)));
+      e.hp -= dmg;
+      e.flash = 1;
+      const ep = enemyPos(e);
+      spawnShock(hp.x, hp.y, ep.x, ep.y);
+      spawnDamageNumber(ep.x, ep.y - ep.r - 10, String(dmg), '#7ec8ff');
+      logDamageDealt('Static Ward', dmg);
+      applyLifesteal(dmg);
+      applyAffixReactions(e, dmg);
+    });
+    queue.filter(e => e.hp <= 0).forEach(e => killEnemy(e));
+  }
+
   // Every unit farther than its role's range steps toward the hero — closer units move first
   // each tick, claiming their destination hex immediately, so a farther unit can never land on
   // a hex someone closer already took (the "priority queue" that avoids two units on one hex).
@@ -5750,6 +6416,7 @@
     const occupied = new Set([hexKey(heroHex.row, heroHex.idx)]);
     if (hero.decoy) occupied.add(hexKey(hero.decoy.hex.row, hero.decoy.hex.idx));
     queue.forEach(e => occupied.add(hexKey(e.hex.row, e.hex.idx)));
+    allies.forEach(a => occupied.add(hexKey(a.hex.row, a.hex.idx))); // so nothing paths through an ally's hex
     // Any terrain that blocks movement (Ice Wall today) goes into the base occupied set so
     // approach pathing routes around it automatically. A future blocking terrain type extends
     // terrainBlockingHexes, not this function. Smoke Screen never blocks movement — a smoked
@@ -5778,8 +6445,12 @@
       .forEach(({ e }) => {
         // Whip's slow composes multiplicatively with terrain exactly like Iron Boots does for
         // the hero (see resolveHeroMovement) — baked into simDt rather than a 3rd param on
-        // advanceMoveProgress.
-        const slowMult = e.slowTimer > 0 ? e.slowMult : 1;
+        // advanceMoveProgress. Frostbite's Chill stacks (8%/stack), Shatterpoint's own chill-wave
+        // slow, and Creeping Dread's stacks (10%/stack) all compose into the same chain.
+        const slowMult = (e.slowTimer > 0 ? e.slowMult : 1)
+          * (e.shatterSlowTimer > 0 ? e.shatterSlowMult : 1)
+          * (1 - 0.08 * (e.chillStacks || 0))
+          * (1 - 0.10 * (e.cdStacks || 0));
         if (!advanceMoveProgress(e, terrainAt(e.hex), simDt * slowMult * hasteMultFor(e))) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
         const losCheck = n => hasLineOfSight(n, target);
         const isSmart = ENEMY_TYPES[e.typeId] && ENEMY_TYPES[e.typeId].smart;
@@ -5823,6 +6494,7 @@
     // advanceMoveProgress, since nothing else needs a per-unit speed multiplier there yet.
     if (!advanceMoveProgress(hero, terrainAt(heroHex), simDt * s.moveSpeedMult)) return;
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
+    allies.forEach(a => occupied.add(hexKey(a.hex.row, a.hex.idx))); // the hero can't walk through an ally either
     terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through blocking terrain either
     const losCheck = n => hasLineOfSight(n, target.hex, trueSight);
     // Same "try the nicer set first, fall back if that's impossible" shape resolveEnemyMovement
@@ -5987,6 +6659,7 @@
     maybeRetargetHero();
     resolveHeroMovement(simDt);
     resolveEnemyMovement(simDt);
+    resolveAllyCombat(simDt);
 
     // Bear Trap — checked right after movement resolves each tick, so it catches whichever
     // enemy just stepped onto it (or was already standing there). One-shot: beartrapHex is
@@ -6030,6 +6703,27 @@
       hero.hp -= poisonDmg;
       logDamageTaken('Poison', poisonDmg);
       checkHeroDeath();
+    }
+
+    // Vengeful Spirit — stacks decay independently, same queue.length gate as everything above.
+    if (hero.vengefulStacks > 0 && queue.length) {
+      hero.vengefulDecayTimer -= simDt;
+      if (hero.vengefulDecayTimer <= 0) hero.vengefulStacks = 0;
+    }
+    // Killing Spree — the buff window decays independently too; once it runs out, the stack
+    // count resets so the NEXT kill (chain or not) starts from a clean base again.
+    if (hero.killingSpreeTimer > 0 && queue.length) {
+      hero.killingSpreeTimer -= simDt;
+      if (hero.killingSpreeTimer <= 0) { hero.killingSpreeTimer = 0; hero.killingSpreeStacks = 0; }
+    }
+    // Arcane Barrier — recharges to full after a few seconds without taking a hit (reset in
+    // enemyAttack on every hit, shield-absorbed or not).
+    if (isEquipped('arcanebarrier') && queue.length) {
+      const shieldMax = s.magic * 2;
+      if (hero.shieldHp < shieldMax) {
+        hero.shieldNoHitTimer += simDt;
+        if (hero.shieldNoHitTimer >= 4) hero.shieldHp = shieldMax;
+      }
     }
 
     // Same "only accumulate attack progress while actually in range" rule enemies use — the
@@ -6080,25 +6774,55 @@
       }
     });
 
-    // Every living enemy within its role's range attacks independently on its own timer —
-    // that's what makes facing more of them at once genuinely more dangerous. One still
-    // closing the distance just doesn't accumulate attack progress until it arrives — no
-    // burst of pent-up attacks the instant it gets there. Snapshot the roster first since an
-    // attack (e.g. a Thorns kill) can remove entries mid-loop.
+    // Every living enemy independently picks whichever candidate — the hero/decoy, or any
+    // living ally — is closest AND actually in-range+LOS to IT, defaulting to the hero/decoy on
+    // a tie. Movement (resolveEnemyMovement, above) still only ever paths every enemy toward
+    // aggroHex() — completely unchanged; this only decides who gets attacked once an enemy's
+    // already in position, so an enemy never diverts its approach to chase an ally standing off
+    // to the side — it only "notices" one once it's already closer than the hero/decoy from
+    // wherever the enemy's own approach put it. Snapshot the roster first since an attack (e.g.
+    // a Thorns/Static Ward kill) can remove entries mid-loop.
     const enemyTarget = aggroHex();
     queue.slice().forEach(enemy => {
       if (phase !== 'combat' || !queue.includes(enemy)) return;
-      // Whip's slow — decays independently of stun/attack eligibility below, so it keeps
-      // ticking down even on a tick where the enemy doesn't get to act at all.
+      // Whip's slow / Shatterpoint's chill wave — decay independently of stun/attack eligibility
+      // below, so they keep ticking down even on a tick where the enemy doesn't get to act at all.
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - simDt);
+      if (enemy.shatterSlowTimer > 0) enemy.shatterSlowTimer = Math.max(0, enemy.shatterSlowTimer - simDt);
+      // Frostbite's Chill decay — the whole stack resets once the timer (refreshed on every hit
+      // that adds a stack — see heroAttack) runs out.
+      if (enemy.chillStacks > 0) {
+        enemy.chillDecayTimer = (enemy.chillDecayTimer || 0) - simDt;
+        if (enemy.chillDecayTimer <= 0) enemy.chillStacks = 0;
+      }
+      // Creeping Dread — stacks build every 2s while within 2 hexes of the hero, and clear
+      // instantly (not a gradual decay) the moment the enemy leaves that radius.
+      if (isEquipped('creepingdread')) {
+        if (hexDistance(enemy.hex, heroHex) <= 2) {
+          enemy.cdTimer = (enemy.cdTimer || 0) + simDt;
+          while (enemy.cdTimer >= 2 && (enemy.cdStacks || 0) < 3) { enemy.cdTimer -= 2; enemy.cdStacks = (enemy.cdStacks || 0) + 1; }
+        } else if (enemy.cdStacks) {
+          enemy.cdStacks = 0; enemy.cdTimer = 0;
+        }
+      }
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
       if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
-      if (hexDistance(enemy.hex, enemyTarget) > effectiveAtkRange(enemy.hex, enemyBaseRange(enemy), false, enemyTarget)) return; // e.g. fogged — capped to melee regardless of role
-      if (!hasLineOfSight(enemy.hex, enemyTarget)) return; // e.g. Ice Wall blocks the shot, not just adjacency
+
+      const baseRange = enemyBaseRange(enemy);
+      const candidates = [{ kind: 'hero', hex: enemyTarget }].concat(allies.map(a => ({ kind: 'ally', ref: a, hex: a.hex })));
+      let best = null, bestDist = Infinity;
+      candidates.forEach(c => {
+        const dist = hexDistance(enemy.hex, c.hex);
+        const inRange = dist <= effectiveAtkRange(enemy.hex, baseRange, false, c.hex) && hasLineOfSight(enemy.hex, c.hex);
+        if (inRange && dist < bestDist) { bestDist = dist; best = c; }
+      });
+      if (!best) return; // nothing in range/LOS at all this tick — same early-return as before, just reframed
+
       enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult * hasteMultFor(enemy); // e.g. Debris slows attacks too, not just movement
-      while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)) {
+      while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)
+          && (best.kind === 'hero' || (allies.includes(best.ref) && best.ref.hp > 0))) { // stop mid-tick if this enemy's own earlier hit this tick just killed the ally it was aiming at
         enemy.atkTimer -= enemy.atkInterval;
-        enemyAttack(enemy);
+        enemyAttack(enemy, best);
       }
     });
     renderHeroPanel();
@@ -6115,6 +6839,10 @@
     queue.forEach(e => {
       e.flash = Math.max(0, (e.flash || 0) - dt * 4);
       e.lunge = Math.max(0, (e.lunge || 0) - dt * 8);
+    });
+    allies.forEach(a => {
+      a.flash = Math.max(0, (a.flash || 0) - dt * 4);
+      a.lunge = Math.max(0, (a.lunge || 0) - dt * 8);
     });
     dmgNumbers.forEach(n => n.life -= dt * 1.2);
     dmgNumbers = dmgNumbers.filter(n => n.life > 0);
@@ -6141,6 +6869,9 @@
     hero = freshHero();
     wave = 0; // depth counter — the beginner encounter is depth 0; real path choices start at depth 1
     queue = [];
+    allies = [];
+    thrallsRaisedThisFight = 0;
+    waveClearFiring = false;
     chosenEncounter = null;
     pathOptions = [];
     roomState = null;
