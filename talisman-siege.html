@@ -50,7 +50,7 @@
   button.primary { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
   button.primary:hover:not(:disabled) { background: #4a7ad8; }
   button.speedBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
-  button.stanceBtn.active, button.targetModeBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
+  button.stanceBtn.active, button.targetModeBtn.active, button.weaponTargetBtn.active { background: #3d6ecb; border-color: #4d7edb; color: #fff; }
   label.chk { font-size: 13px; color: #bbb; display: flex; align-items: center; gap: 4px; cursor: pointer; }
   #wipeBtn { background: transparent; border-color: #4a2f2f; color: #a06060; font-size: 11px; padding: 5px 9px; }
   #wipeBtn:hover:not(:disabled) { background: #3a1f1f; color: #e08a8a; border-color: #6b3a3a; }
@@ -282,6 +282,8 @@
     padding: 22px 26px;
     max-width: 620px;
     width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
     box-shadow: 0 10px 50px rgba(0,0,0,0.6);
   }
   .modalBox h2 { margin: 0 0 4px; color: #fff; font-size: 19px; }
@@ -359,12 +361,16 @@
   .dmgSummaryTotalRow { border-bottom: 1px solid #46465a; margin-bottom: 2px; font-weight: 700; }
   .dmgSummaryTotalRow span:first-child { color: #eee; }
   /* Uses nth-child rather than first/last-child — this used to be just Dealt/Taken (two
-     columns, so first/last worked), but adding a third Healing column would have silently
-     shifted "last" onto the wrong one otherwise. Unprefixed so both the victory summary and the
-     game-over modal share the same coloring (the latter never had it before). */
+     columns, so first/last worked), but adding more columns would have silently shifted "last"
+     onto the wrong one otherwise. Unprefixed so both the victory summary and the game-over modal
+     share the same coloring (the latter never had it before). */
   .dmgSummaryCols .dmgSummaryCol:nth-child(1) .dmgSummaryRow span:last-child { color: #7dd3fc; }
   .dmgSummaryCols .dmgSummaryCol:nth-child(2) .dmgSummaryRow span:last-child { color: #e88; }
   .dmgSummaryCols .dmgSummaryCol:nth-child(3) .dmgSummaryRow span:last-child { color: #7bd88f; }
+  .dmgSummaryCols .dmgSummaryCol:nth-child(4) .dmgSummaryRow span:last-child { color: #d8b84a; }
+  .dmgSummaryCols .dmgSummaryCol:nth-child(5) .dmgSummaryRow span:last-child { color: #8fa8c9; }
+  .dmgSummaryCols .dmgSummaryCol:nth-child(6) .dmgSummaryRow span:last-child { color: #c9a8e0; }
+  .dmgSummaryCols .dmgSummaryCol:nth-child(7) .dmgSummaryRow span:last-child { color: #ffd479; }
 
   </style>
 </head>
@@ -415,7 +421,7 @@
         <h2>Hero</h2>
         <div id="hpBarOuter"><div id="hpBarInner"></div></div>
         <div class="statRow" title="Your current and maximum health. Reaching 0 ends the run, unless a talisman like Second Wind or a Potion saves you."><span>HP</span><span id="hpText">100 / 100</span></div>
-        <div class="statRow" title="Base physical damage per hit. Scales your weapon's own attack (except the Staff, which uses Magic instead) and any ability that reads Damage."><span>Damage</span><span id="statDamage">-</span></div>
+        <div class="statRow" title="Base physical damage per hit. Scales your weapon's own attack (except the Staff, which uses Magic instead) and any ability that reads Physical Damage."><span>Physical Damage</span><span id="statDamage">-</span></div>
         <div class="statRow" title="Base magic power — a separate stat from Damage. Scales spell-like abilities (Fireball, Magic Missile) and the Staff's beam."><span>Magic</span><span id="statMagic">-</span></div>
         <div class="statRow" title="Attacks per second — your weapon's own pace combined with any talisman or upgrade bonuses."><span>Attack Speed</span><span id="statAtkSpeed">-</span></div>
         <div class="statRow" title="Flat damage subtracted from every hit you take, before Damage Reduction% (if unlocked) takes its own cut of what's left."><span>Armor</span><span id="statArmor">-</span></div>
@@ -440,6 +446,11 @@
           <button class="targetModeBtn" data-target-mode="strongest" title="Always target whichever enemy currently has the most HP.">Strongest</button>
           <button class="targetModeBtn" data-target-mode="weakest" title="Always target whichever enemy currently has the least HP.">Weakest</button>
           <button class="targetModeBtn" data-target-mode="random" title="Target a random enemy — re-rolls only when your current target dies, not every tick.">Random</button>
+        </div>
+        <h2 id="weaponTargetingLabel" style="display:none">Weapon Targeting</h2>
+        <div class="stanceBtnGroup" id="weaponTargetingPanel" style="display:none">
+          <button class="weaponTargetBtn active" data-weapon-target-mode="focus" title="Both bolts always hit your current target.">Focus Fire</button>
+          <button class="weaponTargetBtn" data-weapon-target-mode="split" title="The second bolt goes to the next-best target instead, when one's in range.">Split Fire</button>
         </div>
       </div>
       <div id="abilitiesSection" class="windowSection">
@@ -504,6 +515,22 @@
         <h3>Healing</h3>
         <div id="dmgHealedList" class="dmgSummaryList"></div>
       </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Mitigated</h3>
+        <div id="dmgMitigatedList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Shielded</h3>
+        <div id="dmgShieldedList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Dodged</h3>
+        <div id="dmgDodgedList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Crowd Control</h3>
+        <div id="dmgCrowdControlList" class="dmgSummaryList"></div>
+      </div>
     </div>
     <button class="primary" id="combatSummaryContinueBtn">Continue</button>
   </div>
@@ -536,6 +563,22 @@
       <div class="dmgSummaryCol">
         <h3>Healing</h3>
         <div id="gameOverDmgHealedList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Mitigated</h3>
+        <div id="gameOverDmgMitigatedList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Shielded</h3>
+        <div id="gameOverDmgShieldedList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Damage Dodged</h3>
+        <div id="gameOverDmgDodgedList" class="dmgSummaryList"></div>
+      </div>
+      <div class="dmgSummaryCol">
+        <h3>Crowd Control</h3>
+        <div id="gameOverDmgCrowdControlList" class="dmgSummaryList"></div>
       </div>
     </div>
     <div class="modalLegacySection">
@@ -683,7 +726,7 @@
   const STAT_LABELS = {
     critChance: 'Crit Chance', regen: 'HP Regen', lifesteal: 'Lifesteal', thorns: 'Thorns', dodge: 'Dodge Chance',
     damageReduction: 'Damage Reduction', atkSpeedScaling: 'Attack Speed Scaling',
-    dmg: 'Damage', maxHP: 'Max HP', atkSpeed: 'Attack Speed', gold: 'Gold', cooldownReduction: 'Cooldown Reduction', armor: 'Armor', atkRange: 'Attack Range',
+    dmg: 'Physical Damage', maxHP: 'Max HP', atkSpeed: 'Attack Speed', gold: 'Gold', cooldownReduction: 'Cooldown Reduction', armor: 'Armor', atkRange: 'Attack Range',
     moveSpeed: 'Movement Speed', magic: 'Magic',
   };
 
@@ -691,7 +734,7 @@
     // --- Core stats: flat, additive, capped at level 10. Uniform 5g start / 1.4x growth
     // (5/7/10/14/19/27/38/53/74/103g across the 10 levels) so a few early levels are always
     // affordable enough to survive on, not just a mid-run investment. ---
-    { id: 'damage',    name: 'Sharpen Blade',    desc: '+2 Damage',              baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
+    { id: 'damage',    name: 'Sharpen Blade',    desc: '+2 Physical Damage',     baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
     { id: 'atkSpeed',  name: 'Swift Strikes',    desc: '+0.1 Attack Speed',      baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
     { id: 'maxHP',     name: 'Vitality',         desc: '+15 Max HP',             baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
     { id: 'armor',     name: 'Iron Skin',        desc: '+1 Armor',               baseCost: 5, mult: 1.4, category: 'generic', maxLevel: 10 },
@@ -741,6 +784,20 @@
   // else there) since it's spent inventory, not per-fight state.
   const POTION_COST = 10;
   const POTION_HEAL_AMOUNT = 25;
+  // Cap on held stock, and Fibonacci price scaling on top of the base cost — n is
+  // hero.potionsBoughtThisRun (a lifetime-this-run purchase count, distinct from hero.potions'
+  // current held stock, which depletes on use) — see potionPrice/fib and buyPotion. No depth
+  // scaling on top of this, by design — price scaling alone is meant to carry the curve.
+  const POTION_CAP = 3;
+  function fib(n) {
+    if (n <= 0) return 0;
+    let a = 0, b = 1;
+    for (let i = 1; i < n; i++) { [a, b] = [b, a + b]; }
+    return b;
+  }
+  function potionPrice() {
+    return POTION_COST + fib(hero.potionsBoughtThisRun);
+  }
 
   // Mage's Apprentice's shield — see shieldedHexKeys/shieldMultAgainst below and
   // buildQueueFromEncounter's Apprentice placement pass for how a given shield's center is
@@ -828,7 +885,7 @@
       triggerType: 'passive', modifies: ['dmg'], scalesWith: ['maxHP'] },
     { id: 'killerinstinct', tier: 'minor', icon: '\u{1F3AF}', name: 'Killer Instinct', desc: '20% Crit Chance. Crits always deal double damage. Physical weapons only — magic weapons (Wand, Staff) never crit.', unlocksStat: 'critChance',
       triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
-    { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+10% Damage.',
+    { id: 'battlefury',  tier: 'minor', icon: '\u{1F4AA}', name: 'Battle Fury',   desc: '+10% Physical Damage.',
       triggerType: 'passive', modifies: ['dmg'] },
     { id: 'ironvitality', tier: 'minor', icon: '\u{1F49A}', name: 'Iron Vitality', desc: '+25% Max HP.',
       triggerType: 'passive', modifies: ['maxHP'] },
@@ -836,7 +893,7 @@
       triggerType: 'passive', modifies: ['cooldownReduction'] },
     { id: 'smokescreen', tier: 'minor', type: 'ability', icon: '\u{1F32B}\u{FE0F}', name: 'Smoke Screen', desc: `Every ${ABILITY_CFG.smokescreen.cooldown}s, blind the furthest enemy's patch of 4 hexes for ${SMOKE_DURATION}s — enemies inside move at ${Math.round(SMOKE_SLOW_MULT * 100)}% speed and can't attack until they step out. Affects enemies only — unlike terrain, it never slows or blinds you.`,
       triggerType: 'ability', frequencyGate: 'cooldown' },
-    { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP.',
+    { id: 'secondwind',  tier: 'major', icon: '\u{1F343}', name: 'Second Wind',   desc: 'Once per wave, survive a killing blow and refill to 15% of your total HP — then surge for 5s: +30% Damage, +30% Attack Speed, +25% lifesteal on everything you do.',
       triggerType: 'reactive', scalesWith: ['maxHP'] },
     { id: 'overcharge',  tier: 'minor', icon: '\u{26A1}',  name: 'Overcharge',    desc: 'Every 5th attack deals 2.5x damage.',
       triggerType: 'proc', scalesWith: ['dmg'], frequencyGate: 'attackSpeed' },
@@ -860,7 +917,7 @@
       triggerType: 'ability', scalesWith: ['magic'], frequencyGate: 'cooldown' },
     { id: 'hurricane',   tier: 'major', type: 'ability', icon: '\u{1F32C}\u{FE0F}', name: "Hurricane's Might", desc: `Every ${ABILITY_CFG.hurricane.cooldown}s, a swirling gust pushes every enemy within ${HURRICANE_RADIUS} hexes outward and around you — anything shoved into a Chasm falls to its death.`,
       triggerType: 'ability', frequencyGate: 'cooldown' },
-    { id: 'marksmansreach', tier: 'minor', icon: '\u{1F4CF}', name: "Marksman's Reach", desc: '+1 attack range with Sword, +1 with Spear, +2 with Crossbow.',
+    { id: 'marksmansreach', tier: 'minor', icon: '\u{1F4CF}', name: "Marksman's Reach", desc: '+1 attack range to whichever weapon you have equipped.',
       triggerType: 'passive', modifies: ['atkRange'] },
     { id: 'truesight',   tier: 'minor', icon: '\u{1F441}\u{FE0F}', name: 'True Sight', desc: "See past Fog Patch and other sight-blockers that don't physically bar your path, as if they weren't there — doesn't help against a real barrier like Ice Wall or Ruins.",
       triggerType: 'passive' },
@@ -870,8 +927,10 @@
       triggerType: 'ability', scalesWith: ['magic'], frequencyGate: 'cooldown' },
 
     // ---- Majors + minors added this batch ----
-    { id: 'spectralguardian', tier: 'major', icon: '\u{1F47B}', name: 'Spectral Guardian', desc: 'Summon a Spectral Guardian at the start of each fight, fighting at your side — 30% of your HP, Damage, Armor, and Damage Reduction, but your FULL attack speed and move speed. If it falls, it’s gone for that fight; a fresh one rises next fight.',
-      triggerType: 'passive', scalesWith: ['maxHP', 'dmg', 'armor'] },
+    { id: 'spellblade', tier: 'major', icon: '\u{1F5E1}\u{FE0F}', name: 'Spellblade', desc: 'While wielding a non-magical weapon, every hit also deals your full Magic as a separate magic-damage hit — tracked as its own damage type, and never affected by crits.',
+      triggerType: 'onhit', scalesWith: ['magic'] },
+    { id: 'spectralguardian', tier: 'major', type: 'setup', icon: '\u{1F47B}', name: 'Spectral Guardian', desc: 'Fights at your side — 30% of your HP, Magic, Armor, and Damage Reduction, but your FULL attack speed and move speed. Place it before the fight (within 3 hexes of you) like a setup ability, or leave it unplaced to auto-spawn adjacent to you. If it falls, it’s gone for that fight; a fresh one rises next fight.',
+      triggerType: 'setup', scalesWith: ['maxHP', 'magic', 'armor'] },
     { id: 'frostbite', tier: 'major', icon: '\u{1F976}', name: 'Frostbite', desc: 'Every hit chills your target, stacking up to 5 times (8% slower each). At 5 stacks, they freeze solid — stunned briefly and shattered for a burst of bonus damage — then the stacks reset.',
       triggerType: 'onhit', scalesWith: ['dmg'] },
     { id: 'blinkstrike', tier: 'major', icon: '\u{1F4A8}', name: 'Blink Strike', desc: 'On every kill, blink behind the furthest living enemy and backstab it for 3x damage. If that backstab also kills, it chains again.',
@@ -886,7 +945,7 @@
       triggerType: 'passive' },
     { id: 'shatterpoint', tier: 'minor', icon: '\u{1F9CA}', name: 'Shatterpoint', desc: 'Every 4th attack chills your target and everything adjacent to it, slowing them 25% for 3s. If Frostbite freezes and kills an enemy while it’s still slowed by this, it explodes, splashing the shatter damage onto nearby enemies too.',
       triggerType: 'proc', frequencyGate: 'attackSpeed' },
-    { id: 'gallantsgift', tier: 'minor', icon: '\u{1F381}', name: "Gallant's Gift", desc: 'Choose +20 HP, +5 Damage, or +5 Armor when you equip this — unequip it and the bonus vanishes, but you can re-equip and choose again.',
+    { id: 'gallantsgift', tier: 'minor', icon: '\u{1F381}', name: "Gallant's Gift", desc: 'Choose +20 HP, +5 Physical Damage, or +5 Armor when you equip this — unequip it and the bonus vanishes, but you can re-equip and choose again.',
       triggerType: 'passive' },
     { id: 'guardiansvigor', tier: 'minor', icon: '\u{1F49A}', name: "Guardian's Vigor", desc: 'Heal 4% of your max HP on any kill. If your Spectral Guardian lands the kill, also heal 15% of the damage it dealt.',
       triggerType: 'proc', scalesWith: ['maxHP'] },
@@ -896,7 +955,7 @@
       triggerType: 'reactive', modifies: ['dmg'] },
     { id: 'staticward', tier: 'minor', icon: '\u{1F50B}', name: 'Static Ward', desc: 'Every hit you take zaps the attacker for a burst of Magic damage. If Arcane Barrier is equipped, this becomes a nova hitting every nearby enemy the instant your shield breaks.',
       triggerType: 'reactive', scalesWith: ['magic'] },
-    { id: 'creepingdread', tier: 'minor', icon: '\u{1F578}\u{FE0F}', name: 'Creeping Dread', desc: 'Enemies within 2 hexes of you slow by 10% every 2s, up to 3 stacks — clears the instant they step away. If Dread Aura is equipped, each stack deepens its damage debuff/amplify by 5%.',
+    { id: 'creepingdread', tier: 'minor', icon: '\u{1F578}\u{FE0F}', name: 'Creeping Dread', desc: 'Enemies within 3 hexes of you slow by 10% (movement AND attack speed) every 2s, up to 3 stacks — clears the instant they step away. If Dread Aura is equipped, each stack deepens its damage debuff/amplify by 5%.',
       triggerType: 'passive' },
     { id: 'gravepact', tier: 'minor', icon: '\u{1FAA6}', name: 'Grave Pact', desc: '+10 Magic.',
       triggerType: 'passive', modifies: ['magic'] },
@@ -912,9 +971,21 @@
       triggerType: 'proc', modifies: ['armor'] },
     { id: 'overdrive', tier: 'minor', icon: '\u{1F501}', name: 'Overdrive', desc: '5% chance per attack to strike again instantly. If Momentum is equipped, that chance scales with its current stacks, up to +20% more.',
       triggerType: 'proc', frequencyGate: 'attackSpeed' },
+
+    // ---- Batch 4 additions ----
+    { id: 'immovablemonster', tier: 'major', icon: '\u{1F422}', name: 'Immovable Monster', desc: 'The more your move speed is reduced below normal, the more damage you deal — a -50% move speed penalty becomes +50% damage, 1:1. Only ever helps; it reads whatever your move speed already is rather than imposing its own penalty.',
+      triggerType: 'passive', modifies: ['dmg'], scalesWith: ['moveSpeed'] },
+    { id: 'continuity', tier: 'minor', icon: '\u{1F305}', name: 'Continuity', desc: 'Heal 10% of your missing HP at the end of every round. If you have a Spectral Guardian or any resurrected thralls still alive when a fight ends, they survive into the next fight instead of being wiped, carrying their current HP forward as-is.',
+      triggerType: 'passive', scalesWith: ['maxHP'] },
+    { id: 'resistmagicalafflictions', tier: 'minor', icon: '\u{1F9FF}', name: 'Resist Magical Afflictions', desc: 'Take 50% less from magical afflictions applied to you — Plagued’s poison and Cursed’s reflect.',
+      triggerType: 'passive' },
+    { id: 'debuffamplifier', tier: 'minor', icon: '\u{2623}\u{FE0F}', name: 'Debuff Amplifier', desc: 'Every debuff you apply is 20% stronger — slows, freezes, stuns, roots, and Dread Aura’s damage debuff/amplify all hit harder (a 50% slow becomes a 60% slow, and so on).',
+      triggerType: 'passive' },
+    { id: 'frostlance', tier: 'minor', icon: '\u{1F328}\u{FE0F}', name: 'Frost Lance', desc: 'While wielding a ranged magical weapon, your shots pass straight through Ice Wall as icy blue shards. A shot that actually crosses the wall deals your normal Magic damage plus 12 flat Frost Damage, and slows its target 30% (movement and attack speed) for 2s.',
+      triggerType: 'onhit', scalesWith: ['magic'] },
   ];
 
-  const SETUP_TALISMAN_IDS = ['icewall', 'beartrap'];
+  const SETUP_TALISMAN_IDS = ['icewall', 'beartrap', 'spectralguardian'];
 
   // Momentum's live stack count + the attack-speed bonus it's currently granting — Nate's ask
   // was to make this visible, not just knowable by doing the math yourself. Reads
@@ -993,11 +1064,14 @@
       desc: 'Balanced melee weapon, same as the Sword — but +10 damage while advancing (moved at least one hex since your last attack). Lasts through every hit until you land a kill, then resets; you have to move again to reactivate it.' },
     whip: { id: 'whip', name: 'Whip', icon: '\u{1FA80}', role: 'reach', rangeOverride: 3, atkSpeedMult: 0.9,
       desc: '3-hex range, 0.9x attack speed. Every hit slows the target by 75% for 1.5s.' },
-    boomerang: { id: 'boomerang', name: 'Boomerang', icon: '\u{1FA83}', role: 'ranged',
+    boomerang: { id: 'boomerang', name: 'Boomerang', icon: '\u{1FA83}', role: 'ranged', rangeOverride: 4,
       desc: 'Ranged, no other tradeoffs — but after hitting your target, it bounces to up to 2 more enemies, full damage each, as long as each next enemy is within 2 hexes of the last and in clear line of sight (blocked by Ice Wall/Ruins, same as any shot).' },
-    wand: { id: 'wand', name: 'Wand', icon: '\u{1FA84}', role: 'ranged', magical: true,
+    wand: { id: 'wand', name: 'Wand', icon: '\u{1FA84}', role: 'ranged', magical: true, rangeOverride: 3,
       dmgMult: 0.5, atkSpeedMult: 2,
-      desc: '2x attack speed, 0.5x Magic damage per hit — the fast, reliable option. Never crits (no magic weapon does).' },
+      desc: '2x attack speed, 0.5x Magic damage per hit — the fast, reliable option. Every hit also chips 5% off the remaining time on all your equipped ability cooldowns. Never crits (no magic weapon does).' },
+    dualcrossbows: { id: 'dualcrossbows', name: 'Dual Crossbows', icon: '\u{1F3F9}', role: 'ranged', rangeOverride: 4,
+      dmgMult: 0.6, atkSpeedMult: 0.7, dualBow: true, hasWeaponTargeting: true,
+      desc: "Fires two crossbows independently on staggered, evenly-spaced timing (each bolt at 0.6x damage) — the gap between them is always half your current attack interval, so it speeds up right along with your attack speed. Choose Focus Fire (both bolts on your current target) or Split Fire (the second bolt goes to the next-best target instead) in the Weapon Targeting panel." },
     staff: { id: 'staff', name: 'Staff', icon: '\u{1F52E}', role: 'ranged', magical: true,
       atkSpeedMult: 4,
       desc: `A channeled beam that ramps from weak to devastating the longer you hold it on the same target — ${STAFF_MIN_DMG_MULT}x to ${STAFF_MAX_DMG_MULT}x Magic damage over ${STAFF_MAX_STACKS} hits, resetting if you switch targets. Once fully ramped, the beam pierces through your target, hitting every enemy behind it in a line for 25% less each, until line of sight breaks. Never crits (no magic weapon does).` },
@@ -1006,7 +1080,7 @@
     // instead hits EVERY enemy in range each swing, deliberately for very little each (see
     // triggerFarseerOrb) so it reads as a genuine tradeoff (wide but shallow), not a strictly
     // better Wand.
-    farseerorb: { id: 'farseerorb', name: "Farseer's Orb", icon: '\u{1F310}', role: 'ranged', magical: true,
+    farseerorb: { id: 'farseerorb', name: "Farseer's Orb", icon: '\u{1F310}', role: 'ranged', magical: true, rangeOverride: 6,
       dmgMult: 0.35,
       desc: 'A hovering orb that pulses outward with every swing, hitting EVERY enemy in range for a small amount of Magic damage each — wide, not deep. Never crits (no magic weapon does).' },
   };
@@ -1024,9 +1098,11 @@
     const s = computeStats(id);
     const lines = [w.desc];
     if (id === 'staff') {
-      lines.push(`Damage: ${Math.round(s.magic * STAFF_MIN_DMG_MULT)} unramped → ${Math.round(s.magic * STAFF_MAX_DMG_MULT)} fully ramped`);
+      lines.push(`Magic Damage: ${(s.magic * STAFF_MIN_DMG_MULT).toFixed(2)} unramped → ${(s.magic * STAFF_MAX_DMG_MULT).toFixed(2)} fully ramped`);
+    } else if (w.magical) {
+      lines.push(`Magic Damage: ${(s.magic * (w.dmgMult || 1)).toFixed(2)}`);
     } else {
-      lines.push(`Damage: ${Math.round(w.magical ? s.magic * (w.dmgMult || 1) : s.dmg)}`);
+      lines.push(`Physical Damage: ${s.dmg.toFixed(2)}`);
     }
     lines.push(
       `Attack Speed: ${s.atkSpeed.toFixed(2)}/s`,
@@ -1058,6 +1134,9 @@
     // A short, stubby "orb" rather than a real weapon shape — the actual attack visual is the
     // radiating pulse effect (see spawnFarseerPulse), not this held-item silhouette.
     farseerorb:   { weaponShape: 'cross', weaponBaseReach: 0.35, weaponLunge: 0.15, weaponBlade: 0.2, weaponWidth: 0.18, weaponTail: 0.02, weaponGuard: 0.02, weaponColor: '#5ce0d8' },
+    // Reuses the same crossbow silhouette as the single Crossbow, just its own tint — a genuine
+    // "two bolts" visual (drawing a second bow) is Batch 5 (visual pass) territory.
+    dualcrossbows: { weaponShape: 'crossbow', weaponBaseReach: 0.4, weaponWindup: 0.32, weaponWindupFrac: 0.75, weaponLunge: 0.1, weaponColor: '#e8a13d' },
   };
 
   // ---------------- Wave scaling config ----------------
@@ -1767,7 +1846,9 @@
   // Per-fight damage-source tallies, shown in the post-combat summary (see showCombatSummary/
   // gameOver) — reset to empty at the start of every fight so the screen only ever reflects the
   // fight that just ended, not a running lifetime total.
-  let combatStats = { dealt: {}, taken: {}, healed: {} };
+  // mitigated/shielded/dodged track damage AVOIDED (not dealt/taken) by source; crowdControl
+  // tracks SECONDS of enemy action denied by source, not a damage amount — see logCrowdControl.
+  let combatStats = { dealt: {}, taken: {}, healed: {}, mitigated: {}, shielded: {}, dodged: {}, crowdControl: {} };
   function logDamageDealt(source, amount) {
     if (amount <= 0) return;
     combatStats.dealt[source] = (combatStats.dealt[source] || 0) + amount;
@@ -1780,14 +1861,34 @@
     if (amount <= 0) return;
     combatStats.healed[source] = (combatStats.healed[source] || 0) + amount;
   }
+  function logMitigated(source, amount) {
+    if (amount <= 0) return;
+    combatStats.mitigated[source] = (combatStats.mitigated[source] || 0) + amount;
+  }
+  function logShielded(source, amount) {
+    if (amount <= 0) return;
+    combatStats.shielded[source] = (combatStats.shielded[source] || 0) + amount;
+  }
+  function logDodged(source, amount) {
+    if (amount <= 0) return;
+    combatStats.dodged[source] = (combatStats.dodged[source] || 0) + amount;
+  }
+  // Amount here is SECONDS of stun/freeze/root actually added (see the 3 stunTimer sites), not a
+  // damage number — callers must compute the delta over any existing stunTimer themselves so a
+  // stun that's just refreshing an already-longer one doesn't get over-credited.
+  function logCrowdControl(source, seconds) {
+    if (seconds <= 0) return;
+    combatStats.crowdControl[source] = (combatStats.crowdControl[source] || 0) + seconds;
+  }
 
   // Setup abilities (Ice Wall / Bear Trap) — placed during PREP, not on a combat cooldown, so
   // they're reset when a fresh prep phase begins (choosePath/enterBeginnerPrep/enterBossPrep),
   // NOT in startFight — that would wipe out whatever was just placed right before combat starts.
   let iceWallHexes = [];     // committed wall hexes (up to 3), persists prep -> combat, no timer
   let beartrapHex = null;    // committed trap hex, or null if not placed; consumed (nulled) on trigger
+  let guardianHex = null;    // committed Spectral Guardian placement, or null to auto-spawn adjacent to the hero instead — see spawnSpectralGuardian
   let pendingWallHexes = []; // in-progress Ice Wall selection, only touched while placingSetupId === 'icewall'
-  let placingSetupId = null; // 'icewall' | 'beartrap' | null — which setup ability the next hex click affects
+  let placingSetupId = null; // 'icewall' | 'beartrap' | 'spectralguardian' | null — which setup ability the next hex click affects
   // User-facing reason the last placement click/Accept was rejected, or null — shown inline in
   // that ability's own row in the Setup Abilities panel (see setSetupPlacementError). Re-added
   // after Nate reported placement attempts silently doing nothing: the game DID already have an
@@ -1867,6 +1968,12 @@
       // exactly like the equip itself) — only cleared on unequip (see toggleEquip) and re-prompted
       // on the next re-equip.
       gallantsGiftChoice: null,
+      // Dual Crossbows' Focus Fire / Split Fire choice — persists fight-to-fight and across
+      // weapon switches exactly like heroTargetMode/heroStance (only resets in restart()), since
+      // it's inert whenever a non-dual-bow weapon is equipped anyway.
+      weaponTargetMode: 'focus',
+      secondWindSurgeTimer: 0, // Second Wind's post-save surge — see checkHeroDeath/computeStats/simulationStep, reset each fight
+      potionsBoughtThisRun: 0, // drives Fibonacci potion pricing — see potionPrice(), persists the whole run (only resets in restart())
     };
   }
 
@@ -1885,6 +1992,14 @@
   // until it's slotted in via the Loadout tab. This is the whole point of the loadout rework.
   function isEquipped(id) {
     return hero.equipped.major.includes(id) || hero.equipped.minor.includes(id);
+  }
+
+  // Debuff Amplifier — a flat 20% multiplier on every debuff MAGNITUDE/duration the hero applies
+  // (slows, freezes, stuns, roots, Dread Aura's amplify) — never on flat damage numbers, which
+  // aren't debuffs. Applied at each effect's own application site rather than centralized, since
+  // every site's math (a duration vs. a "how much speed remains" slowMult) differs.
+  function debuffAmpMult() {
+    return isEquipped('debuffamplifier') ? 1.2 : 1;
   }
 
   function equipTalisman(id) {
@@ -1982,14 +2097,9 @@
     // per-hero value set once in freshHero, not itself recomputed each frame).
     let moveSpeedMult = 1;
 
-    // +1 Sword/Spear, +2 Crossbow — a flat bonus per weapon rather than a % of ROLE_RANGE, since
-    // scaling Sword's already-tiny range of 1 by a percentage wouldn't add up to anything
-    // meaningful the way it would for Crossbow.
-    if (has('marksmansreach')) {
-      if (equippedWeapon === 'sword') atkRange += 1;
-      else if (equippedWeapon === 'spear') atkRange += 1;
-      else if (equippedWeapon === 'crossbow') atkRange += 2;
-    }
+    // Flat +1 to whichever weapon is equipped — generalized off atkRange itself rather than a
+    // hardcoded list of weapon ids, so any future weapon picks up the bonus automatically.
+    if (has('marksmansreach')) atkRange += 1;
     if (has('thickhide')) { maxHP *= 1.40; atkSpeed *= 0.80; }
     if (has('glasscannon')) { dmg *= 1.40; maxHP *= 0.75; }
     if (has('goldentouch')) goldMult *= 1.3;
@@ -2032,6 +2142,15 @@
       armor += 3 * allies.filter(a => a.kind === 'thrall' && a.hp > 0).length;
     }
     critChance = Math.min(0.75, critChance);
+
+    // Immovable Monster — reads whatever moveSpeedMult already is (e.g. Iron Boots' 0.5) rather
+    // than imposing its own penalty, so it only ever helps: a -50% move speed penalty becomes
+    // +50% damage, 1:1.
+    if (has('immovablemonster')) dmg *= 1 + (1 - moveSpeedMult);
+    // Second Wind's post-save surge — set by checkHeroDeath, decays in simulationStep. The
+    // lifesteal bump is genuine omnivamp for free: applyLifesteal is already called at every
+    // damage-dealing site in the file, so boosting the shared stat heals from all of them.
+    if (hero.secondWindSurgeTimer > 0) { dmg *= 1.3; atkSpeed *= 1.3; lifestealPct += 0.25; }
 
     // Wanderer's Inn "Rest" — a flat +10% to every combat/economy stat (not shopCostMult or
     // the fixed critDamage rule) for a limited number of fights. See waveCleared for the
@@ -2247,6 +2366,19 @@
     effects.push({ type: 'shockwave', x, y, life: 1 });
   }
 
+  // Blink Strike's teleport — a straight streak between the old and new hex, fading over its
+  // whole life rather than sliding along it like spawnBolt (it's an instant relocation, not a
+  // travelling projectile).
+  function spawnBlinkStreak(x1, y1, x2, y2) {
+    effects.push({ type: 'blinkStreak', x1, y1, x2, y2, life: 1 });
+  }
+
+  // Second Wind's save — same expanding-ring shape as spawnShockwaveRing, warm gold-white so it
+  // reads as a revival rather than a stun pulse.
+  function spawnRevivalFlash(x, y) {
+    effects.push({ type: 'revival', x, y, life: 1 });
+  }
+
   // Fireball's travel streak (hero to target) and its arrival burst — same shape as
   // spawnBolt/spawnShockwaveRing, just its own colors so it reads as fire rather than a bowshot
   // or a stun pulse.
@@ -2352,9 +2484,9 @@
   // onto (or continuously re-lock onto) a target it visibly couldn't land a hit on. Worst under
   // Hold specifically because the hero never physically moves to accidentally self-correct the
   // way it might while Advancing.
-  function isAttackableNow(e, s, trueSight) {
+  function isAttackableNow(e, s, trueSight, ignoreIceWall) {
     return hexDistance(heroHex, e.hex) <= effectiveAtkRange(heroHex, s.atkRange, trueSight, e.hex)
-      && hasLineOfSight(heroHex, e.hex, trueSight);
+      && hasLineOfSight(heroHex, e.hex, trueSight, ignoreIceWall);
   }
 
   // Attackable-right-now always outranks not-attackable, full stop, UNLESS the hero's current
@@ -2369,9 +2501,9 @@
   // for melee, with no correctness cost, since there's nothing for the tier check to protect
   // against there. `s.atkRange` already reflects any talisman that extends it (Marksman's
   // Reach), so a Sword+Marksman's Reach hero correctly keeps the tier check once its range is 2.
-  function isBetterTarget(a, b, s, trueSight) {
+  function isBetterTarget(a, b, s, trueSight, ignoreIceWall) {
     if (s.atkRange > 1) {
-      const aAtk = isAttackableNow(a, s, trueSight), bAtk = isAttackableNow(b, s, trueSight);
+      const aAtk = isAttackableNow(a, s, trueSight, ignoreIceWall), bAtk = isAttackableNow(b, s, trueSight, ignoreIceWall);
       if (aAtk !== bAtk) return aAtk;
     }
     // Used for a FRESH pick (see pickHeroTarget) where there's no existing target to be biased
@@ -2391,9 +2523,9 @@
   // improvement (not a tie) since it's a hard tier change, not a same-tier score comparison — but
   // only when the tier check even applies; see isBetterTarget's comment for why it's skipped at
   // melee range (atkRange === 1).
-  function isStrictlyBetterTarget(a, b, s, trueSight) {
+  function isStrictlyBetterTarget(a, b, s, trueSight, ignoreIceWall) {
     if (s.atkRange > 1) {
-      const aAtk = isAttackableNow(a, s, trueSight), bAtk = isAttackableNow(b, s, trueSight);
+      const aAtk = isAttackableNow(a, s, trueSight, ignoreIceWall), bAtk = isAttackableNow(b, s, trueSight, ignoreIceWall);
       if (aAtk !== bAtk) return aAtk;
     }
     return targetScore(a) < targetScore(b);
@@ -2405,20 +2537,35 @@
   // whichever enemies there are, since there's nothing "chase-worthy" to weigh yet.
   function pickHeroTarget() {
     if (!queue.length) { heroTargetId = null; return; }
-    const s = computeStats(), trueSight = isEquipped('truesight');
+    const s = computeStats(), trueSight = isEquipped('truesight'), ignoreIceWall = frostLanceBypass();
     if (heroTargetMode === 'random') {
-      const attackable = queue.filter(e => isAttackableNow(e, s, trueSight));
+      const attackable = queue.filter(e => isAttackableNow(e, s, trueSight, ignoreIceWall));
       const pool = attackable.length ? attackable : queue;
       heroTargetId = pool[Math.floor(Math.random() * pool.length)].id;
       return;
     }
     let best = queue[0];
-    queue.forEach(e => { if (isBetterTarget(e, best, s, trueSight)) best = e; });
+    queue.forEach(e => { if (isBetterTarget(e, best, s, trueSight, ignoreIceWall)) best = e; });
     heroTargetId = best.id;
   }
   function currentHeroTarget() {
     if (heroTargetId == null) return null;
     return queue.find(e => e.id === heroTargetId) || null;
+  }
+
+  // Dual Crossbows' Split Fire — the second bow's target, excluding the primary. Reuses the
+  // exact same isAttackableNow/isBetterTarget scoring pickHeroTarget itself uses, so it only
+  // ever returns another enemy that's ALREADY in range+LOS right now (never a farther one the
+  // hero would need to reposition for) — returns null when nothing else qualifies, which the
+  // caller in heroAttack falls back on to mean "both bolts hit the primary target instead."
+  function pickDualCrossbowSecondaryTarget(primary) {
+    const s = computeStats(), trueSight = isEquipped('truesight'), ignoreIceWall = frostLanceBypass();
+    const candidates = queue.filter(e => e !== primary && isAttackableNow(e, s, trueSight, ignoreIceWall));
+    if (!candidates.length) return null;
+    if (heroTargetMode === 'random') return candidates[Math.floor(Math.random() * candidates.length)];
+    let best = candidates[0];
+    candidates.forEach(e => { if (isBetterTarget(e, best, s, trueSight, ignoreIceWall)) best = e; });
+    return best;
   }
 
   // Continuous live re-evaluation — every simulationStep tick, whichever enemy currently ranks
@@ -2435,15 +2582,15 @@
     // re-picks fresh the instant that target dies, via the !target branch above (killEnemy nulls
     // heroTargetId — see there).
     if (heroTargetMode === 'random') return;
-    const s = computeStats(), trueSight = isEquipped('truesight');
+    const s = computeStats(), trueSight = isEquipped('truesight'), ignoreIceWall = frostLanceBypass();
     let best = target;
-    queue.forEach(e => { if (isStrictlyBetterTarget(e, best, s, trueSight)) best = e; });
+    queue.forEach(e => { if (isStrictlyBetterTarget(e, best, s, trueSight, ignoreIceWall)) best = e; });
     if (best.id !== target.id) heroTargetId = best.id;
   }
 
   function heroAttack(isBonus) {
     if (!currentHeroTarget()) pickHeroTarget();
-    const target = currentHeroTarget();
+    let target = currentHeroTarget();
     if (!target) return;
     const s = computeStats();
     hero.attackCount++;
@@ -2452,6 +2599,19 @@
     // Farseer's Orb hits every enemy in range instead of a single target — its own dedicated
     // resolution, not the single-target flow below.
     if (hero.equippedWeapon === 'farseerorb') { triggerFarseerOrb(s); return; }
+
+    // Dual Crossbows — bolts alternate bows each call (attackCount's parity, since each bolt is
+    // now its own simulationStep tick — see the halved heroInterval there). Under Split Fire,
+    // the "second bow" bolt retargets to the next-best in-range candidate under the current
+    // Targeting mode, falling back to the primary target if nothing else qualifies (exactly "if
+    // there's only one target in range, both bolts hit it"). Movement and the upstream range
+    // gate in simulationStep still key off the STICKY primary currentHeroTarget() — this only
+    // swaps which enemy THIS bolt's damage lands on, so every general-purpose proc below
+    // (Executioner, Frostbite, Riposte, Dread Aura, Spellblade, Overcharge, the crit split)
+    // keeps working unmodified against whichever target got resolved.
+    if (hero.equippedWeapon === 'dualcrossbows' && hero.weaponTargetMode === 'split' && hero.attackCount % 2 === 0) {
+      target = pickDualCrossbowSecondaryTarget(target) || target;
+    }
 
     if (HERO_WEAPON_VISUALS[hero.equippedWeapon].weaponShape === 'crossbow') {
       // Same origin math as the Archer's own bolt (see enemyAttack) — offset forward and to
@@ -2568,7 +2728,7 @@
     // (see simulationStep) deepen this the longer that target's stayed close.
     if (isEquipped('dreadaura') && hexDistance(heroHex, target.hex) <= 2) {
       const extra = isEquipped('creepingdread') ? 0.05 * (target.cdStacks || 0) : 0;
-      dmg *= 1 + (0.20 + extra);
+      dmg *= 1 + (0.20 * debuffAmpMult() + extra);
     }
     // Kept PRE-shield for Boomerang's bounces below, which each need their OWN per-hex shield
     // check (a bounce can land on a shielded hex even when the primary target's hex wasn't, or
@@ -2586,16 +2746,56 @@
     const executed = isEquipped('executioner') && target.hp - dmg > 0 && (target.hp - dmg) / target.maxHp < 0.15;
     if (executed) dmg = Math.round(target.hp);
 
-    target.hp -= dmg;
+    // Spellblade — adds the hero's full current Magic as a separate magic-damage component when
+    // wielding a non-magical weapon. Computed independently (its own shield check against the
+    // target's hex), deliberately NOT run through the crit multiplier above — flat, every hit,
+    // crit or not. Executioner's overkill check above stays scoped to the physical `dmg` only
+    // (a deliberate scope call, same spirit as Boomerang's primary-hit-stays-instant decision) —
+    // the combined hit can occasionally overkill slightly past exactly zero, which is harmless.
+    const spellbladeDmg = (isEquipped('spellblade') && !weaponDef.magical)
+      ? Math.max(1, Math.round(s.magic * shieldMultAgainst(target.hex)))
+      : 0;
+
+    target.hp -= (dmg + spellbladeDmg);
     target.flash = 1;
     const p = enemyPos(target);
     spawnSlash(p.x, p.y);
     spawnDamageNumber(p.x, p.y - p.r - 10, executed ? 'EXECUTED' : String(dmg), executed ? '#ff6b6b' : (isCrit ? '#f0c14b' : '#fff'));
+    if (spellbladeDmg > 0) spawnDamageNumber(p.x, p.y - p.r - 30, String(spellbladeDmg), '#7ec8ff');
     if (executed) log('Executed!', 'crit');
     else if (isCrit) log(`Crit! You hit for ${dmg}.`, 'crit');
-    logDamageDealt(executed ? 'Executioner' : 'Auto Attack', dmg);
-    applyLifesteal(dmg);
-    applyAffixReactions(target, dmg);
+    // Crit Damage is its own combat-summary bucket — a straight 50/50 split of whatever the
+    // (already fully-modified) physical hit came out to, since the crit rule is always a flat
+    // 2x and that always sums back to the same total. No attempt at perfectly exact bookkeeping
+    // through every earlier multiplier (Riposte's bonus, Dread Aura's amplify, etc.) — good
+    // enough to show "what your build is actually doing" without a much bigger rewrite.
+    // Spellblade's magic component is logged entirely separately, untouched by this split, since
+    // it was never part of the crit math to begin with.
+    const baseSource = executed ? 'Executioner' : 'Auto Attack';
+    if (isCrit) {
+      const critBonus = Math.round(dmg / 2);
+      logDamageDealt(baseSource, dmg - critBonus);
+      logDamageDealt('Crit Damage', critBonus);
+    } else {
+      logDamageDealt(baseSource, dmg);
+    }
+    if (spellbladeDmg > 0) logDamageDealt('Spellblade', spellbladeDmg);
+    applyLifesteal(dmg + spellbladeDmg);
+    applyAffixReactions(target, dmg + spellbladeDmg);
+
+    // Wand — every hit chips 5% off the remaining time on every currently-equipped ability's
+    // cooldown. Self-limiting (shrinks as a cooldown gets close to ready), so it can't runaway
+    // even at Wand's 2x attack speed — makes it the natural pick for ability-stacked builds
+    // despite its low per-hit damage. Reuses the exact effectiveCooldown formula simulationStep's
+    // own ability-dispatch loop already uses, so it can never drift out of sync with real pacing.
+    if (hero.equippedWeapon === 'wand') {
+      Object.keys(ABILITY_CFG).forEach(id => {
+        if (!isEquipped(id)) return;
+        const effectiveCooldown = ABILITY_CFG[id].cooldown * (1 - s.cooldownReductionPct);
+        const remaining = Math.max(0, effectiveCooldown - (hero.cooldowns[id] || 0));
+        hero.cooldowns[id] = (hero.cooldowns[id] || 0) + remaining * 0.05;
+      });
+    }
     if (weaponDef.id === 'staff') hero.staffStacks = Math.min(STAFF_MAX_STACKS, hero.staffStacks + 1);
 
     // Staff, once fully ramped: the beam pierces through the target instead of stopping there,
@@ -2640,7 +2840,7 @@
     // refreshed on every hit rather than stacking, same as Bear Trap/Shockwave's stunTimer.
     if (hero.equippedWeapon === 'whip') {
       target.slowTimer = 1.5;
-      target.slowMult = 0.25;
+      target.slowMult = 1 - Math.min(1, 0.75 * debuffAmpMult());
     }
 
     // Shatterpoint — every 4th attack (independent of Frostbite's per-hit chill), send a chill
@@ -2651,7 +2851,7 @@
     // still sees it.
     if (isEquipped('shatterpoint') && hero.attackCount % 4 === 0) {
       const waveTargets = [target].concat(queue.filter(e => e !== target && hexDistance(e.hex, target.hex) <= 1));
-      waveTargets.forEach(e => { e.shatterSlowTimer = 3; e.shatterSlowMult = 0.75; });
+      waveTargets.forEach(e => { e.shatterSlowTimer = 3; e.shatterSlowMult = 1 - Math.min(1, 0.25 * debuffAmpMult()); });
     }
 
     // Frostbite — every hit chills the target (skipped if this hit already killed it — no point
@@ -2663,7 +2863,9 @@
       target.chillDecayTimer = 3;
       if (target.chillStacks >= 5) {
         const heavy = target.weight === 'miniboss' || target.weight === 'boss';
-        target.stunTimer = Math.max(target.stunTimer || 0, heavy ? 0.75 : 1.5);
+        const freezeDur = (heavy ? 0.75 : 1.5) * debuffAmpMult();
+        logCrowdControl('Frostbite', Math.max(0, freezeDur - (target.stunTimer || 0)));
+        target.stunTimer = Math.max(target.stunTimer || 0, freezeDur);
         const shatterDmg = Math.max(1, Math.round(s.dmg * shieldMultAgainst(target.hex)));
         target.hp -= shatterDmg;
         target.flash = 1;
@@ -2695,6 +2897,23 @@
         target.chillStacks = 0;
         target.chillDecayTimer = 0;
       }
+    }
+
+    // Frost Lance — only fires when the shot ACTUALLY crossed an Ice Wall hex (reusing
+    // hexesBetween, the same sampling hexesBetween/hasLineOfSight already use), not just for
+    // wielding a ranged magical weapon with the talisman — a genuine synergy, not a blanket buff.
+    if (frostLanceBypass() && target.hp > 0 && hexesBetween(heroHex, target.hex).some(h => iceWallHexes.some(w => w.row === h.row && w.idx === h.idx))) {
+      const frostDmg = Math.max(1, Math.round(12 * shieldMultAgainst(target.hex)));
+      target.hp -= frostDmg;
+      target.flash = 1;
+      spawnSlash(p.x, p.y);
+      spawnDamageNumber(p.x, p.y - p.r - 30, String(frostDmg), '#8fd6ff');
+      logDamageDealt('Frost Lance', frostDmg);
+      applyLifesteal(frostDmg);
+      applyAffixReactions(target, frostDmg);
+      target.frostLanceSlowTimer = 2;
+      target.frostLanceSlowMult = 1 - Math.min(1, 0.30 * debuffAmpMult());
+      if (target.hp <= 0) killEnemyFromHeroAttack(target);
     }
 
     // Boomerang — after the primary hit, bounces to up to 2 MORE distinct enemies, each within
@@ -2798,7 +3017,11 @@
     if (!isBonus && isEquipped('overdrive')) {
       let chance = 0.05;
       if (isEquipped('momentum')) chance += 0.01 * Math.min(MOMENTUM_MAX_STACKS, hero.talismanStacks.momentum || 0);
-      if (Math.random() < chance) heroAttack(true);
+      if (Math.random() < chance) {
+        const hp = heroPixelPos();
+        spawnDamageNumber(hp.x, hp.y - HERO_RADIUS - 34, 'Overdrive!', '#ffd479');
+        heroAttack(true);
+      }
     }
   }
 
@@ -2896,7 +3119,8 @@
     queue.forEach(enemy => {
       const d = hexDistance(enemy.hex, heroHex);
       if (d > 2) return;
-      const stunDur = d === 1 ? 1.0 : 0.5;
+      const stunDur = (d === 1 ? 1.0 : 0.5) * debuffAmpMult();
+      logCrowdControl('Shockwave', Math.max(0, stunDur - (enemy.stunTimer || 0)));
       enemy.stunTimer = Math.max(enemy.stunTimer || 0, stunDur);
       hitAny = true;
     });
@@ -3061,7 +3285,7 @@
       let hitDmg = baseDmg;
       if (isEquipped('dreadaura') && hexDistance(heroHex, e.hex) <= 2) {
         const extra = isEquipped('creepingdread') ? 0.05 * (e.cdStacks || 0) : 0;
-        hitDmg *= 1 + (0.20 + extra);
+        hitDmg *= 1 + (0.20 * debuffAmpMult() + extra);
       }
       hitDmg = Math.max(1, Math.round(hitDmg * shieldMultAgainst(e.hex)));
       e.hp -= hitDmg;
@@ -3162,7 +3386,9 @@
     const dmg = Math.max(1, Math.round(s.dmg * 3 * shieldMultAgainst(enemy.hex)));
     enemy.hp -= dmg;
     enemy.flash = 1;
-    enemy.stunTimer = Math.max(enemy.stunTimer || 0, 2);
+    const rootDur = 2 * debuffAmpMult();
+    logCrowdControl('Bear Trap', Math.max(0, rootDur - (enemy.stunTimer || 0)));
+    enemy.stunTimer = Math.max(enemy.stunTimer || 0, rootDur);
     const p = enemyPos(enemy);
     spawnSlash(p.x, p.y);
     spawnDamageNumber(p.x, p.y - p.r - 10, String(dmg), '#ff8a3d');
@@ -3181,7 +3407,7 @@
   function applyAffixReactions(enemy, dmgDealt) {
     const affixes = (chosenEncounter && chosenEncounter.affixes) || [];
     if (affixes.includes('cursed')) {
-      const reflected = Math.round(dmgDealt * AFFIXES.cursed.reflectPct);
+      const reflected = Math.round(dmgDealt * AFFIXES.cursed.reflectPct * (isEquipped('resistmagicalafflictions') ? 0.5 : 1));
       if (reflected > 0) {
         hero.hp -= reflected;
         const hp = heroPixelPos();
@@ -3279,21 +3505,34 @@
       const ep = enemyPos(enemy);
       spawnMageZap(ep.x, ep.y, targetPos.x, targetPos.y);
     }
-    if (Math.random() < s.dodgeChance) {
-      log('You dodged the attack!', 'dodge');
-      return;
-    }
     // Dread Aura — enemies within 2 hexes of the hero's OWN hex (not the decoy — the aura is
     // about the hero's own presence) deal less damage. Creeping Dread's stacks (see
-    // simulationStep) deepen this the longer an enemy has stayed close.
+    // simulationStep) deepen this the longer an enemy has stayed close. Computed BEFORE the
+    // dodge check below (moved up from where it used to sit) so both the dodge log and the real
+    // hit read the exact same "what would actually land" number.
     let dreadMult = 1;
     if (isEquipped('dreadaura') && hexDistance(enemy.hex, heroHex) <= 2) {
       const extra = isEquipped('creepingdread') ? 0.05 * (enemy.cdStacks || 0) : 0;
-      dreadMult = 1 - (0.20 + extra);
+      dreadMult = 1 - Math.min(1, 0.20 * debuffAmpMult() + extra);
     }
+    const afterDread = enemy.damage * dreadMult;
     // Armor subtracts flat first; Damage Reduction % (a separate unlocked stat, see Iron
     // Resolve/Kinetic Ward) then takes a cut of whatever's left — two distinct mitigation layers.
-    let dmg = Math.max(1, Math.round((enemy.damage * dreadMult - s.armor) * (1 - s.damageReductionPct)));
+    let dmg = Math.max(1, Math.round((afterDread - s.armor) * (1 - s.damageReductionPct)));
+
+    if (Math.random() < s.dodgeChance) {
+      log('You dodged the attack!', 'dodge');
+      logDodged(enemyDamageLabel(enemy), dmg); // the full post-mitigation hit that would have landed
+      spawnDamageNumber(targetPos.x, targetPos.y - 40, 'MISS', '#8fd9ff');
+      return;
+    }
+    // Damage Mitigated — how much LESS damage landed because of Dread Aura and/or Armor/DR,
+    // logged by source. Only counted here, past the dodge check above — a fully dodged hit
+    // wasn't "mitigated," none of it landed at all, so it's credited to Dodged instead.
+    const dreadMitigated = Math.round(enemy.damage - afterDread);
+    if (dreadMitigated > 0) logMitigated('Dread Aura', dreadMitigated);
+    const armorDRMitigated = Math.max(0, Math.round(afterDread) - dmg);
+    if (armorDRMitigated > 0) logMitigated('Armor & Damage Reduction', armorDRMitigated);
 
     if (decoy) {
       // The decoy is a conjured illusion, not the hero's own flesh — hits against it never
@@ -3319,6 +3558,7 @@
       dmg -= absorbed;
       shieldAfter = hero.shieldHp;
       hero.shieldNoHitTimer = 0;
+      logShielded('Arcane Barrier', absorbed);
     }
 
     if (dmg > 0) {
@@ -3424,6 +3664,9 @@
       const before = hero.hp;
       hero.hp = Math.round(s.maxHP * 0.15);
       hero.secondWindUsedThisWave = true;
+      hero.secondWindSurgeTimer = 5;
+      const hp = heroPixelPos();
+      spawnRevivalFlash(hp.x, hp.y);
       logHealing('Second Wind', hero.hp - before);
       log(`Second Wind saves you, refilling to ${hero.hp} HP!`, 'crit');
     } else {
@@ -3432,21 +3675,28 @@
     }
   }
 
-  // Fills two containers with the per-fight damage tallies from combatStats (see logDamageDealt/
-  // logDamageTaken), sorted highest-first — shared by the victory summary modal and the game-over
-  // modal so both read from the exact same accumulated data.
-  function renderDamageSummaryInto(dealtEl, takenEl, healedEl) {
-    const renderList = (el, obj) => {
+  // Fills the per-fight tally containers from combatStats (see logDamageDealt/logDamageTaken/
+  // logMitigated/logShielded/logDodged/logCrowdControl), sorted highest-first — shared by the
+  // victory summary modal and the game-over modal so both read from the exact same accumulated
+  // data. Crowd Control renders in seconds (one decimal) instead of a rounded damage integer,
+  // since combatStats.crowdControl holds durations, not damage amounts.
+  function renderDamageSummaryInto(dealtEl, takenEl, healedEl, mitigatedEl, shieldedEl, dodgedEl, crowdControlEl) {
+    const renderList = (el, obj, formatAmt) => {
+      const fmt = formatAmt || (amt => Math.round(amt));
       const entries = Object.entries(obj).sort((a, b) => b[1] - a[1]);
       if (!entries.length) { el.innerHTML = '<span class="empty">None</span>'; return; }
       const total = entries.reduce((sum, [, amt]) => sum + amt, 0);
-      const totalRow = `<div class="dmgSummaryRow dmgSummaryTotalRow"><span>Total</span><span>${Math.round(total)}</span></div>`;
-      const rows = entries.map(([label, amt]) => `<div class="dmgSummaryRow"><span>${label}</span><span>${Math.round(amt)}</span></div>`).join('');
+      const totalRow = `<div class="dmgSummaryRow dmgSummaryTotalRow"><span>Total</span><span>${fmt(total)}</span></div>`;
+      const rows = entries.map(([label, amt]) => `<div class="dmgSummaryRow"><span>${label}</span><span>${fmt(amt)}</span></div>`).join('');
       el.innerHTML = totalRow + rows;
     };
     renderList(dealtEl, combatStats.dealt);
     renderList(takenEl, combatStats.taken);
     renderList(healedEl, combatStats.healed);
+    renderList(mitigatedEl, combatStats.mitigated);
+    renderList(shieldedEl, combatStats.shielded);
+    renderList(dodgedEl, combatStats.dodged);
+    renderList(crowdControlEl, combatStats.crowdControl, amt => amt.toFixed(1) + 's');
   }
 
   // Blocking recap shown the instant a fight is won, before any reward/advance flow runs —
@@ -3458,6 +3708,10 @@
       document.getElementById('dmgDealtList'),
       document.getElementById('dmgTakenList'),
       document.getElementById('dmgHealedList'),
+      document.getElementById('dmgMitigatedList'),
+      document.getElementById('dmgShieldedList'),
+      document.getElementById('dmgDodgedList'),
+      document.getElementById('dmgCrowdControlList'),
     );
     document.getElementById('combatSummaryModal').classList.remove('hidden');
     document.getElementById('combatSummaryContinueBtn').onclick = () => {
@@ -3499,6 +3753,11 @@
         hero.talismanStacks.momentum = (hero.talismanStacks.momentum || 0) + 1;
       }
       hero.secondWindUsedThisWave = false;
+      if (isEquipped('continuity')) {
+        const before = hero.hp;
+        hero.hp = Math.min(s.maxHP, hero.hp + (s.maxHP - hero.hp) * 0.10);
+        if (hero.hp > before) logHealing('Continuity', hero.hp - before);
+      }
       if (hero.restBuffFightsRemaining > 0) hero.restBuffFightsRemaining--;
       wave = clearedDepth + 1;
 
@@ -3557,6 +3816,10 @@
       document.getElementById('gameOverDmgDealtList'),
       document.getElementById('gameOverDmgTakenList'),
       document.getElementById('gameOverDmgHealedList'),
+      document.getElementById('gameOverDmgMitigatedList'),
+      document.getElementById('gameOverDmgShieldedList'),
+      document.getElementById('gameOverDmgDodgedList'),
+      document.getElementById('gameOverDmgCrowdControlList'),
     );
     document.getElementById('gameOverModal').classList.remove('hidden');
     renderAll();
@@ -3578,6 +3841,7 @@
   function resetSetupAbilities() {
     iceWallHexes = [];
     beartrapHex = null;
+    guardianHex = null;
     pendingWallHexes = [];
     placingSetupId = null;
   }
@@ -3927,14 +4191,15 @@
     smokeZones = [];
     pendingActions = [];
     heroTargetId = null;
-    combatStats = { dealt: {}, taken: {}, healed: {} };
+    combatStats = { dealt: {}, taken: {}, healed: {}, mitigated: {}, shielded: {}, dodged: {}, crowdControl: {} };
     // heroStance deliberately NOT reset here — Nate's explicit ask: Hold should stay selected
     // fight after fight until he manually switches back to Advance, not silently revert the
     // instant a new fight starts. It only resets on a full New Attempt (see restart()).
     // Allies never persist across fights — no mid-fight Guardian respawn and Necromancer's
     // Pendant's total-for-the-fight cap both fall out of this reset rather than needing their
-    // own enforcement logic.
-    allies = [];
+    // own enforcement logic. Continuity is the one deliberate exception — a still-living
+    // Guardian/thrall carries its current HP into the next fight instead of being wiped.
+    if (!isEquipped('continuity')) allies = [];
     thrallsRaisedThisFight = 0;
     waveClearFiring = false;
     hero.riposteReady = false; hero.riposteBonusBasis = 0;
@@ -3943,8 +4208,9 @@
     hero.shieldNoHitTimer = 0;
     hero.boneWardStacks = 0;
     hero.killingSpreeTimer = 0; hero.killingSpreeStacks = 0;
+    hero.secondWindSurgeTimer = 0;
     phase = 'combat';
-    if (isEquipped('spectralguardian')) spawnSpectralGuardian();
+    if (isEquipped('spectralguardian') && !allies.some(a => a.kind === 'guardian')) spawnSpectralGuardian();
     log(`Encounter begins: ${chosenEncounter.desc}`, 'wave');
     renderAll();
   }
@@ -3973,9 +4239,12 @@
   // they're an uncapped repeatable stockpile at a flat price, not a leveled stat with a cost
   // curve. Both share the exact same phase gate as every other shop/reroll action (prep only).
   function buyPotion() {
-    if ((phase !== 'prepping' && phase !== 'beginnerPrep') || gold < POTION_COST) return;
-    gold -= POTION_COST;
+    if ((phase !== 'prepping' && phase !== 'beginnerPrep') || hero.potions >= POTION_CAP) return;
+    const price = potionPrice();
+    if (gold < price) return;
+    gold -= price;
     hero.potions++;
+    hero.potionsBoughtThisRun++;
     renderAll();
   }
   function drinkPotion() {
@@ -4073,6 +4342,12 @@
     // never silently disagrees with the actual state after a new fight starts.
     document.querySelectorAll('.stanceBtn').forEach(b => b.classList.toggle('active', b.dataset.stance === heroStance));
     document.querySelectorAll('.targetModeBtn').forEach(b => b.classList.toggle('active', b.dataset.targetMode === heroTargetMode));
+    // Weapon Targeting only shows up for weapons that actually have one (Dual Crossbows today) —
+    // re-checked every render so switching weapons immediately shows/hides it.
+    const hasWeaponTargeting = !!HERO_WEAPONS[hero.equippedWeapon].hasWeaponTargeting;
+    document.getElementById('weaponTargetingLabel').style.display = hasWeaponTargeting ? '' : 'none';
+    document.getElementById('weaponTargetingPanel').style.display = hasWeaponTargeting ? '' : 'none';
+    document.querySelectorAll('.weaponTargetBtn').forEach(b => b.classList.toggle('active', b.dataset.weaponTargetMode === hero.weaponTargetMode));
     document.getElementById('floorNum').textContent = floor;
     document.getElementById('waveNum').textContent = wave;
     document.getElementById('goldAmt').textContent = gold;
@@ -4102,14 +4377,14 @@
     const hpPct = Math.max(0, Math.min(100, (hero.hp / s.maxHP) * 100));
     document.getElementById('hpBarInner').style.width = hpPct + '%';
     document.getElementById('hpText').textContent = `${Math.max(0, Math.round(hero.hp))} / ${s.maxHP}`;
-    document.getElementById('statDamage').textContent = Math.round(s.dmg);
+    document.getElementById('statDamage').textContent = s.dmg.toFixed(2);
     document.getElementById('statMagic').textContent = Math.round(s.magic);
     document.getElementById('statAtkSpeed').textContent = s.atkSpeed.toFixed(2) + '/s';
     document.getElementById('statArmor').textContent = s.armor;
     document.getElementById('statPotions').textContent = hero.potions;
     setStatRow('statRowDamageReduction', 'damageReduction', Math.round(s.damageReductionPct * 100) + '%');
     setStatRow('statRowCritChance', 'critChance', Math.round(s.critChance * 100) + '%');
-    setStatRow('statRowRegen', 'regen', s.regen.toFixed(1) + '/s');
+    setStatRow('statRowRegen', 'regen', s.regen.toFixed(2) + '/s');
     setStatRow('statRowLifesteal', 'lifesteal', Math.round(s.lifestealPct * 100) + '%');
     setStatRow('statRowThorns', 'thorns', Math.round(s.thornsPct * 100) + '%');
     setStatRow('statRowDodge', 'dodge', Math.round(s.dodgeChance * 100) + '%');
@@ -4309,6 +4584,30 @@
         }
       }
 
+      if (id === 'spectralguardian') {
+        if (placingSetupId === 'spectralguardian') {
+          const hint = document.createElement('span');
+          hint.className = 'setupHint';
+          hint.textContent = 'Click an open hex within 3 of you…';
+          controls.appendChild(hint);
+          const cancelBtn = document.createElement('button');
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.addEventListener('click', () => { placingSetupId = null; setupPlacementError = null; renderAll(); });
+          controls.appendChild(cancelBtn);
+        } else {
+          const status = document.createElement('span');
+          status.className = 'setupStatus';
+          status.textContent = guardianHex ? 'Placed' : 'Not placed (auto-spawns adjacent to you)';
+          controls.appendChild(status);
+          if (canPlace) {
+            const btn = document.createElement('button');
+            btn.textContent = guardianHex ? 'Re-place' : 'Place';
+            btn.addEventListener('click', () => { placingSetupId = 'spectralguardian'; setupPlacementError = null; renderAll(); });
+            controls.appendChild(btn);
+          }
+        }
+      }
+
       row.appendChild(controls);
       // Rendered in whichever ability's own row is currently placing — "ideally by the setup
       // ability you're trying to use," not a generic toast — so it's obvious which control the
@@ -4396,15 +4695,15 @@
       <div class="shopInfo">
         <div class="shopName">Potion</div>
         <div class="shopDesc">Restores ${POTION_HEAL_AMOUNT} HP. Auto-drunk if a hit would otherwise kill you; drink manually here between fights.</div>
-        <div class="shopLevel">Owned: ${hero.potions}</div>
+        <div class="shopLevel">Owned: ${hero.potions}/${POTION_CAP}</div>
       </div>
       <div class="shopBuy">
-        <div class="shopCost">${POTION_COST}g</div>
+        <div class="shopCost">${potionPrice()}g</div>
       </div>`;
     const potionBuyWrap = potionRow.querySelector('.shopBuy');
     const buyPotionBtn = document.createElement('button');
     buyPotionBtn.textContent = 'Buy';
-    buyPotionBtn.disabled = !canShop || gold < POTION_COST;
+    buyPotionBtn.disabled = !canShop || hero.potions >= POTION_CAP || gold < potionPrice();
     buyPotionBtn.addEventListener('click', buyPotion);
     potionBuyWrap.appendChild(buyPotionBtn);
     const drinkPotionBtn = document.createElement('button');
@@ -4516,7 +4815,7 @@
         label.className = 'empty';
         label.textContent = "Gallant's Gift — choose a bonus: ";
         pickWrap.appendChild(label);
-        [['hp', '+20 HP'], ['dmg', '+5 Damage'], ['armor', '+5 Armor']].forEach(([stat, text]) => {
+        [['hp', '+20 HP'], ['dmg', '+5 Physical Damage'], ['armor', '+5 Armor']].forEach(([stat, text]) => {
           const btn = document.createElement('span');
           btn.className = 'talismanChip slotChip tier-minor';
           btn.textContent = text;
@@ -5024,6 +5323,18 @@
     else drawCrossWeapon(r, wx, wy, o);
 
     if (o.shield) drawShield(r, o);
+    // Spellblade — a pulsing magic glow at the weapon's own tip (the same local wx/wy the
+    // weapon shape above just drew at), reading as "this mundane weapon is also channeling
+    // magic" rather than a generic status icon, since it's a property of the weapon itself.
+    if (o.magicGlow) {
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.25 * Math.sin(performance.now() / 200);
+      ctx.fillStyle = '#b47cff';
+      ctx.beginPath();
+      ctx.arc(wx, wy, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -5034,6 +5345,67 @@
     ctx.fillRect(x - w / 2, y, w * Math.max(0, pct), 8);
     ctx.strokeStyle = '#000';
     ctx.strokeRect(x - w / 2, y, w, 8);
+  }
+
+  // Shared small-icon-row renderer for stacking/active status effects — both enemies and the
+  // hero build their own `icons` array fresh each frame from current state and call this once,
+  // so there's no persistent icon state to keep in sync, just a read of what's already there.
+  // `icons`: [{glyph, count, color}] — count > 1 draws a tiny bold badge at the glyph's corner.
+  function drawStatusIcons(x, y, icons) {
+    if (!icons.length) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const spacing = 15;
+    const startX = x - (icons.length - 1) * spacing / 2;
+    icons.forEach((ic, i) => {
+      const ix = startX + i * spacing;
+      ctx.globalAlpha = ic.alpha ?? 1;
+      ctx.font = 'bold 12px Segoe UI';
+      ctx.fillStyle = ic.color || '#fff';
+      ctx.fillText(ic.glyph, ix, y);
+      if (ic.count > 1) {
+        ctx.font = 'bold 9px Segoe UI';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(String(ic.count), ix + 6, y + 6);
+      }
+    });
+    ctx.restore();
+  }
+
+  // Thorns — a handful of short bright spikes just outside the hero's own blob outline, reading
+  // as "reflective" at a glance rather than a plain status icon (it's a permanent passive, not a
+  // triggered/stacking effect, so it doesn't belong in the icon row above).
+  function drawThornsGlint(cx, cy, r) {
+    ctx.save();
+    ctx.strokeStyle = '#e8d84a';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.85;
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 180) * 60 * i + Math.PI / 6;
+      const x1 = cx + Math.cos(angle) * (r + 1), y1 = cy + Math.sin(angle) * (r + 1);
+      const x2 = cx + Math.cos(angle) * (r + 7), y2 = cy + Math.sin(angle) * (r + 7);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Arcane Barrier's shimmer — a faint pulsing ring around the hero while the shield has any HP,
+  // redrawn fresh every frame straight from live state (same pattern as drawHasteGlow/
+  // drawApprenticeShields) rather than living in the decaying `effects` array, since it needs to
+  // persist for as long as the shield does, not fade on a fixed timer.
+  function drawShieldBubble(cx, cy, r) {
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.15 * Math.sin(performance.now() / 260);
+    ctx.strokeStyle = '#7ec8ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   // Faint outlines for every hex on the board — flat-top hexes (vertex angles 0/60/120/.../300),
@@ -5251,6 +5623,20 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('\u{1FAA4}', p.x, p.y);
+      ctx.restore();
+    }
+    if (placingSetupId === 'spectralguardian') {
+      ctx.save();
+      allHexes().filter(h => hexDistance(heroHex, h) <= 3).forEach(h => drawHexFill(h, 'rgba(255,120,220,0.18)', null, false));
+      ctx.restore();
+    }
+    if (guardianHex) {
+      const p = hexPixelPos(guardianHex.row, guardianHex.idx);
+      ctx.save();
+      ctx.font = '20px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u{1F47B}', p.x, p.y);
       ctx.restore();
     }
   }
@@ -5512,12 +5898,32 @@
     const simExtrapolation = Math.min((performance.now() - lastSimStepTime) / 1000, SIM_STEP) * speed;
     const heroInterval = 1 / s.atkSpeed;
     const heroAtkProgress = Math.min(1, (hero.atkTimer + simExtrapolation) / heroInterval);
-    drawFacingUnit(heroP.x + heroShake + heroLungeOff.x, heroP.y + heroLungeOff.y, HERO_RADIUS, heroAngle, hero.hp > 0 ? '#4d8fdb' : '#555', false, heroAtkProgress, HERO_WEAPON_VISUALS[hero.equippedWeapon]);
+    const heroWeaponDef = HERO_WEAPONS[hero.equippedWeapon];
+    drawFacingUnit(heroP.x + heroShake + heroLungeOff.x, heroP.y + heroLungeOff.y, HERO_RADIUS, heroAngle, hero.hp > 0 ? '#4d8fdb' : '#555', false, heroAtkProgress,
+      { ...HERO_WEAPON_VISUALS[hero.equippedWeapon], magicGlow: isEquipped('spellblade') && !heroWeaponDef.magical });
+    if (s.thornsPct > 0) drawThornsGlint(heroP.x, heroP.y, HERO_RADIUS);
+    if (hero.shieldHp > 0) drawShieldBubble(heroP.x, heroP.y, HERO_RADIUS);
     // Clamped to a minimum on-canvas y so a unit standing in the topmost hex row never has its
     // bar partially cut off by the canvas's own edge — closer to the head (radius+16 instead of
     // a much more generous flat 55px) fixes it for almost every position; the clamp is the real
     // guarantee for the handful of hexes still too close to the top even after that.
     drawHealthBar(heroP.x, Math.max(6, heroP.y - HERO_RADIUS - 16), 80, hero.hp / s.maxHP, '#5ac36a');
+    // Arcane Barrier's own bar — same drawHealthBar helper, directly below the HP bar, color
+    // locked to classic light blue per Nate's ask.
+    if (isEquipped('arcanebarrier')) {
+      drawHealthBar(heroP.x, Math.max(6, heroP.y - HERO_RADIUS - 16) + 10, 80, hero.shieldHp / (s.magic * 2), '#7ec8ff');
+    }
+    // Status icon row — stacking/triggered effects only (Thorns/Spellblade/the shield are
+    // continuous states, drawn separately above); built fresh from live state every frame.
+    {
+      const heroIcons = [];
+      if (hero.riposteReady) heroIcons.push({ glyph: '⚔️', color: '#f0c14b' });
+      if (hero.vengefulStacks > 0) heroIcons.push({ glyph: '\u{1F4A2}', count: hero.vengefulStacks, color: '#e05a5a' });
+      if (hero.equippedWeapon === 'duelistblade' && hero.advancingBonusActive) heroIcons.push({ glyph: '\u{1F3C3}', color: '#7ec8ff' });
+      if (hero.boneWardStacks > 0) heroIcons.push({ glyph: '\u{1F9B4}', count: hero.boneWardStacks, color: '#cfcfcf' });
+      if (s.regen > 0) heroIcons.push({ glyph: '\u{1F49A}', color: '#5ac36a', alpha: 0.6 + 0.4 * Math.sin(performance.now() / 300) });
+      drawStatusIcons(heroP.x, Math.max(6, heroP.y - HERO_RADIUS - 30), heroIcons);
+    }
 
     // After Image's decoy — a translucent copy of the hero standing at the hex it swapped out
     // of, with its own (much smaller) health bar. Enemies target it instead of the real hero
@@ -5573,13 +5979,16 @@
         const visuals = (enemy.typeId && ENEMY_VISUALS[enemy.typeId]) || {};
         drawFacingUnit(p.x + shake + lungeOff.x, p.y + lungeOff.y, p.r, angle, color, notable, atkProgress, { ...visuals, hitProgress: enemy.flash });
         drawHealthBar(p.x, Math.max(6, p.y - p.r - 10), p.r * 2.2, enemy.hp / enemy.maxHp, '#e05a5a');
-        if (enemy.stunTimer > 0) {
-          ctx.save();
-          ctx.fillStyle = '#ffd479';
-          ctx.font = 'bold 13px Segoe UI';
-          ctx.textAlign = 'center';
-          ctx.fillText('✱', p.x, p.y - p.r - 22);
-          ctx.restore();
+        // Status icon row — stun (unchanged glyph/color, just folded in here instead of its own
+        // standalone block) alongside Frostbite/Creeping Dread's stacks and a shared "slowed"
+        // icon for Whip/Shatterpoint/Frost Lance's otherwise-invisible slows.
+        {
+          const enemyIcons = [];
+          if (enemy.stunTimer > 0) enemyIcons.push({ glyph: '✱', color: '#ffd479' });
+          if (enemy.chillStacks > 0) enemyIcons.push({ glyph: '❄️', count: enemy.chillStacks, color: '#9fe0ff' });
+          if (enemy.cdStacks > 0) enemyIcons.push({ glyph: '⏳', count: enemy.cdStacks, color: '#c9a8e0' });
+          if (enemy.slowTimer > 0 || enemy.shatterSlowTimer > 0 || enemy.frostLanceSlowTimer > 0) enemyIcons.push({ glyph: '\u{1F422}', color: '#8fd6ff' });
+          drawStatusIcons(p.x, p.y - p.r - 22, enemyIcons);
         }
       });
     } else {
@@ -5709,6 +6118,31 @@
         ctx.save();
         ctx.globalAlpha = a * 0.7;
         ctx.strokeStyle = '#ffd479';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, maxR * t, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === 'blinkStreak') {
+        // The full old-hex-to-new-hex line, fading over its whole life — a snapshot of the
+        // teleport's path rather than something travelling along it.
+        ctx.save();
+        ctx.globalAlpha = a * 0.8;
+        ctx.strokeStyle = '#4d8fdb';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(e.x1, e.y1);
+        ctx.lineTo(e.x2, e.y2);
+        ctx.stroke();
+        ctx.restore();
+      } else if (e.type === 'revival') {
+        // Same expanding-ring shape as 'shockwave', recolored gold-white for a "saved from
+        // death" read instead of a stun pulse.
+        const t = 1 - a;
+        const maxR = HEX_COL_SPACING * 1.6;
+        ctx.save();
+        ctx.globalAlpha = a * 0.8;
+        ctx.strokeStyle = '#fff2b0';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(e.x, e.y, maxR * t, 0, Math.PI * 2);
@@ -6193,14 +6627,26 @@
   // (Ice Wall, Ruins), so Fog Patch (walkable) gets bypassed while real barriers don't. Only the
   // hero's OWN sight ever passes this — every enemy-side call (an enemy checking its own shot at
   // the hero) omits it, since True Sight is the hero's gear, not a change to the terrain itself.
-  function hasLineOfSight(fromHex, toHex, ignorePassableBlockers) {
+  // `ignoreIceWall` is Frost Lance's hook (see frostLanceBypass) — the OPPOSITE selectivity from
+  // `ignorePassableBlockers`: it bypasses a hex specifically because it's in `iceWallHexes`,
+  // regardless of whether it also blocks movement, and never touches Fog Patch/Ruins.
+  function hasLineOfSight(fromHex, toHex, ignorePassableBlockers, ignoreIceWall) {
     if (!terrainBlockingLOSHexes().length) return true; // fast path — nothing currently blocks LOS at all
     return !hexesBetween(fromHex, toHex).some(h => {
+      if (ignoreIceWall && iceWallHexes.some(w => w.row === h.row && w.idx === h.idx)) return false;
       const t = terrainAt(h);
       if (!t.blocksLOS) return false;
       if (ignorePassableBlockers && !t.blocksMovement) return false;
       return true;
     });
+  }
+
+  // Frost Lance's LOS bypass is only active while wielding a ranged magical weapon (Wand/Staff/
+  // Farseer's Orb) with the talisman equipped — otherwise the hero targets/attacks exactly as
+  // before and Ice Wall blocks normally.
+  function frostLanceBypass() {
+    const w = HERO_WEAPONS[hero.equippedWeapon];
+    return isEquipped('frostlance') && !!w.magical && w.role === 'ranged';
   }
 
   // ---------------- Ally combat (Spectral Guardian, Necromancer's Pendant thralls) ----------------
@@ -6273,7 +6719,7 @@
       if (!inRange) {
         if (advanceMoveProgress(ally, terrainAt(ally.hex), simDt)) {
           const losCheck = n => hasLineOfSight(n, target.hex);
-          const step = findStepToward(ally.hex, target.hex, ally.atkRange, occupied, losCheck);
+          const step = resolveMoveStep(ally.hex, target.hex, ally.atkRange, occupied, losCheck);
           if (step) {
             occupied.delete(hexKey(ally.hex.row, ally.hex.idx));
             ally.hex = step;
@@ -6302,15 +6748,21 @@
     return neighborsOf(heroHex.row, heroHex.idx).find(h => !occupied.has(hexKey(h.row, h.idx))) || null;
   }
 
-  // Spectral Guardian — 30% of the hero's HP/damage/Armor/Damage Reduction%, but its FULL attack
+  // Spectral Guardian — 30% of the hero's HP/Magic/Armor/Damage Reduction%, but its FULL attack
   // speed and move speed (unscaled), so it keeps pace and stays genuinely functional rather than
-  // decorative. Melee punches — no ENEMY_VISUALS weapon shape. No mid-fight respawn if it dies;
-  // a fresh one spawns next fight if still equipped (see startFight).
+  // decorative. Melee punches, magic damage. No mid-fight respawn if it dies; a fresh one spawns
+  // next fight if still equipped (see startFight). Spawns at guardianHex if the player committed
+  // a placement (falling back to the adjacent auto-spawn if that hex somehow became invalid by
+  // Start Fight), otherwise spawns adjacent to the hero automatically.
   function spawnSpectralGuardian() {
-    const hex = pickGuardianSpawnHex();
+    const guardianHexStillValid = guardianHex &&
+      !queue.some(e => e.hex.row === guardianHex.row && e.hex.idx === guardianHex.idx) &&
+      !(heroHex.row === guardianHex.row && heroHex.idx === guardianHex.idx) &&
+      !terrainBlockingHexes().some(h => h.row === guardianHex.row && h.idx === guardianHex.idx);
+    const hex = guardianHexStillValid ? guardianHex : pickGuardianSpawnHex();
     if (!hex) return; // no open adjacent hex at fight start — vanishingly rare, just skips spawning this fight
     const s = computeStats();
-    allies.push(makeAlly('guardian', hex, Math.max(1, Math.round(s.maxHP * 0.3)), Math.max(1, Math.round(s.dmg * 0.3)), {
+    allies.push(makeAlly('guardian', hex, Math.max(1, Math.round(s.maxHP * 0.3)), Math.max(1, Math.round(s.magic * 0.3)), {
       armor: s.armor * 0.3,
       damageReductionPct: s.damageReductionPct,
       atkInterval: 1 / s.atkSpeed,
@@ -6363,7 +6815,10 @@
     const hex = neighborsOf(furthest.hex.row, furthest.hex.idx)
       .find(h => !occupied.has(hexKey(h.row, h.idx)) && !blocked.some(t => t.row === h.row && t.idx === h.idx));
     if (!hex) return; // no open hex beside it to blink to — fizzles harmlessly
+    const fromP = heroPixelPos();
     heroHex = hex;
+    const toP = heroPixelPos();
+    spawnBlinkStreak(fromP.x, fromP.y, toP.x, toP.y);
     hero.advancingBonusActive = true; // teleporting counts as movement, same convention resolveHeroMovement uses
     const s = computeStats();
     const dmg = Math.max(1, Math.round(s.dmg * 3 * shieldMultAgainst(furthest.hex)));
@@ -6411,8 +6866,45 @@
   // up (it's what's standing where they last saw the hero), otherwise the hero's real hex.
   function aggroHex() { return hero.decoy ? hero.decoy.hex : heroHex; }
 
+  // Before committing to a real (all-obstacles) route that might be a long way around, check
+  // whether a route exists using ONLY permanent terrain as obstacles (ignoring every creature —
+  // hero/decoy/allies/enemies). If one does, the direction is unambiguous: take its first step
+  // ONLY if that specific hex is free right now; otherwise hold position and wait, rather than
+  // wandering toward whatever "closest reachable hex" the full-obstacle fallback would otherwise
+  // pick. Only when no route exists even with every creature removed (a genuine dead end, like
+  // standing on the wrong side of a fully sealed Ice Wall enclosure) does this fall through to
+  // the existing full-obstacle BFS + closest-reachable-hex fallback, unchanged. Nate's reported
+  // bug: an enemy blocked by an ally standing in a doorway would detour all the way around the
+  // wall for a hex that LOOKED closer (smaller raw hex-distance) but was never actually reachable
+  // — this distinguishes "blocked by a wall" (worth routing around) from "blocked by a friend"
+  // (worth waiting for) by checking whether the wall itself is really what's in the way.
+  function resolveMoveStep(fromHex, toHex, range, occupied, losCheck) {
+    const terrainOnly = new Set(terrainBlockingHexes().map(h => hexKey(h.row, h.idx)));
+    const correctStep = findStepToward(fromHex, toHex, range, terrainOnly, losCheck, false);
+    if (correctStep) {
+      return occupied.has(hexKey(correctStep.row, correctStep.idx)) ? null : correctStep;
+    }
+    return findStepToward(fromHex, toHex, range, occupied, losCheck);
+  }
+
+  // The SAME "nearest target overall" pick now drives both where an enemy walks
+  // (resolveEnemyMovement) and who it swings at (simulationStep's attack loop), so the two can
+  // never disagree — no more "visibly walking toward an ally while attacking the hero" or vice
+  // versa. Pure nearest-distance, per enemy, every tick; hero/decoy wins ties (candidates[0])
+  // since raw distance is genuinely equal at that point. Allies only ever get chosen when one is
+  // actually closer than the hero/decoy right now — no taunt, no hero-priority override, exactly
+  // "Nearest" targeting mode applied to every enemy independently.
+  function pickEnemyAggroTarget(enemy) {
+    const candidates = [{ kind: 'hero', hex: aggroHex() }].concat(allies.map(a => ({ kind: 'ally', ref: a, hex: a.hex })));
+    let best = candidates[0], bestDist = hexDistance(enemy.hex, best.hex);
+    candidates.forEach(c => {
+      const d = hexDistance(enemy.hex, c.hex);
+      if (d < bestDist) { bestDist = d; best = c; }
+    });
+    return best;
+  }
+
   function resolveEnemyMovement(simDt) {
-    const target = aggroHex();
     const occupied = new Set([hexKey(heroHex.row, heroHex.idx)]);
     if (hero.decoy) occupied.add(hexKey(hero.decoy.hex.row, hero.decoy.hex.idx));
     queue.forEach(e => occupied.add(hexKey(e.hex.row, e.hex.idx)));
@@ -6434,23 +6926,31 @@
     const debrisAvoidingOccupied = new Set(occupied);
     debrisHexes().forEach(h => debrisAvoidingOccupied.add(hexKey(h.row, h.idx)));
 
+    // Each enemy now picks its OWN nearest target (hero/decoy, or any closer living ally — see
+    // pickEnemyAggroTarget) instead of every enemy sharing one aggroHex() target — this is what
+    // makes an approaching ally actually pull enemies toward it rather than only ever getting
+    // attacked opportunistically once something else already put an enemy nearby.
+    //
     // Being within role range is no longer enough on its own — a unit that's in range but LOS-
     // blocked (Ice Wall) still needs to reposition for a clear shot, exactly like being out of
     // range. Melee is never affected in practice (adjacent hexes have no hex "between" them for
     // a wall to occupy — see hexesBetween's d<=1 short-circuit).
     movable
-      .map(e => ({ e, dist: hexDistance(e.hex, target) }))
-      .filter(({ e, dist }) => dist > effectiveAtkRange(e.hex, enemyBaseRange(e), false, target) || !hasLineOfSight(e.hex, target))
+      .map(e => { const t = pickEnemyAggroTarget(e); return { e, t, dist: hexDistance(e.hex, t.hex) }; })
+      .filter(({ e, t, dist }) => dist > effectiveAtkRange(e.hex, enemyBaseRange(e), false, t.hex) || !hasLineOfSight(e.hex, t.hex))
       .sort((a, b) => a.dist - b.dist || a.e.id - b.e.id)
-      .forEach(({ e }) => {
+      .forEach(({ e, t }) => {
+        const target = t.hex;
         // Whip's slow composes multiplicatively with terrain exactly like Iron Boots does for
         // the hero (see resolveHeroMovement) — baked into simDt rather than a 3rd param on
         // advanceMoveProgress. Frostbite's Chill stacks (8%/stack), Shatterpoint's own chill-wave
-        // slow, and Creeping Dread's stacks (10%/stack) all compose into the same chain.
+        // slow, Creeping Dread's stacks (10%/stack), and Frost Lance's own slow all compose into
+        // the same chain.
         const slowMult = (e.slowTimer > 0 ? e.slowMult : 1)
           * (e.shatterSlowTimer > 0 ? e.shatterSlowMult : 1)
-          * (1 - 0.08 * (e.chillStacks || 0))
-          * (1 - 0.10 * (e.cdStacks || 0));
+          * (e.frostLanceSlowTimer > 0 ? e.frostLanceSlowMult : 1)
+          * (1 - Math.min(1, 0.08 * debuffAmpMult() * (e.chillStacks || 0)))
+          * (1 - Math.min(1, 0.10 * debuffAmpMult() * (e.cdStacks || 0)));
         if (!advanceMoveProgress(e, terrainAt(e.hex), simDt * slowMult * hasteMultFor(e))) return; // paced by moveSpeed; e.g. Debris/Smoke Screen also tax it
         const losCheck = n => hasLineOfSight(n, target);
         const isSmart = ENEMY_TYPES[e.typeId] && ENEMY_TYPES[e.typeId].smart;
@@ -6462,11 +6962,11 @@
         // Smart units first try to reach TRUE range while avoiding Debris (allowFallback:false —
         // a fallback hit there would just be "closest reachable hex while avoiding debris," which
         // could easily be a worse detour than simply walking through it, so it must not count as
-        // success). Only if that strict attempt fails do they fall through to the exact same call
-        // every other unit uses — true range if reachable, else the closest-reachable-hex fallback
-        // (Nate's melee-chokepoint fix) — which is perfectly happy to walk straight through Debris.
+        // success). Only if that strict attempt fails do they fall through to resolveMoveStep —
+        // true range if reachable, else "wait instead of wander" (see its own comment), which is
+        // perfectly happy to walk straight through Debris once it does commit to a real route.
         const step = (isSmart && findStepToward(e.hex, target, moveRange, debrisAvoidingOccupied, losCheck, false))
-          || findStepToward(e.hex, target, moveRange, occupied, losCheck);
+          || resolveMoveStep(e.hex, target, moveRange, occupied, losCheck);
         if (step) {
           occupied.delete(hexKey(e.hex.row, e.hex.idx));
           debrisAvoidingOccupied.delete(hexKey(e.hex.row, e.hex.idx));
@@ -6486,8 +6986,9 @@
     if (!target) return;
     const s = computeStats();
     const trueSight = isEquipped('truesight');
+    const ignoreIceWall = frostLanceBypass();
     const heroRange = effectiveAtkRange(heroHex, s.atkRange, trueSight, target.hex); // e.g. Fog Patch caps this to 1, regardless of weapon
-    if (hexDistance(heroHex, target.hex) <= heroRange && hasLineOfSight(heroHex, target.hex, trueSight)) return;
+    if (hexDistance(heroHex, target.hex) <= heroRange && hasLineOfSight(heroHex, target.hex, trueSight, ignoreIceWall)) return;
     // Terrain is symmetric — Debris slows the hero's own approach exactly like it slows enemies.
     // moveSpeedMult (Iron Boots) is the hero's own pace, composed multiplicatively with terrain
     // exactly like Debris/Smoke already are, just baked into simDt rather than a 3rd param on
@@ -6496,7 +6997,7 @@
     const occupied = new Set(queue.map(e => hexKey(e.hex.row, e.hex.idx)));
     allies.forEach(a => occupied.add(hexKey(a.hex.row, a.hex.idx))); // the hero can't walk through an ally either
     terrainBlockingHexes().forEach(h => occupied.add(hexKey(h.row, h.idx))); // the hero can't walk through blocking terrain either
-    const losCheck = n => hasLineOfSight(n, target.hex, trueSight);
+    const losCheck = n => hasLineOfSight(n, target.hex, trueSight, ignoreIceWall);
     // Same "try the nicer set first, fall back if that's impossible" shape resolveEnemyMovement
     // already uses for smart unit types — Nate's ask: given a genuine choice between a hex that
     // debuffs (Debris) and one that doesn't, take the clean one. allowFallback:false means a hit
@@ -6507,7 +7008,7 @@
     const debrisAvoidingOccupied = new Set(occupied);
     debrisHexes().forEach(h => debrisAvoidingOccupied.add(hexKey(h.row, h.idx)));
     const step = findStepToward(heroHex, target.hex, heroRange, debrisAvoidingOccupied, losCheck, false)
-      || findStepToward(heroHex, target.hex, heroRange, occupied, losCheck);
+      || resolveMoveStep(heroHex, target.hex, heroRange, occupied, losCheck);
     // Duelist's Blade: any completed hex-step flips this on — checked unconditionally (cheap,
     // harmless for every other weapon) rather than gating the tracking itself on which weapon is
     // equipped, so switching TO Duelist's Blade mid-run doesn't need its own catch-up logic.
@@ -6535,13 +7036,26 @@
     if (queue.some(e => e.hex.row === hex.row && e.hex.idx === hex.idx)) return false;
     if (heroHex.row === hex.row && heroHex.idx === hex.idx) return false;
     if (beartrapHex && beartrapHex.row === hex.row && beartrapHex.idx === hex.idx) return false;
+    if (guardianHex && guardianHex.row === hex.row && guardianHex.idx === hex.idx) return false;
     if (terrainBlockingHexes().some(h => h.row === hex.row && h.idx === hex.idx)) return false;
     return true;
   }
 
   function handleSetupPlacementClick(hex) {
+    if (placingSetupId === 'spectralguardian' && hexDistance(heroHex, hex) > 3) {
+      setSetupPlacementError('The Guardian can only be placed within 3 hexes of you.');
+      return;
+    }
     if (!isHexFreeForSetup(hex)) {
       setSetupPlacementError('That hex is occupied or blocked — pick an open one.');
+      return;
+    }
+    if (placingSetupId === 'spectralguardian') {
+      guardianHex = hex;
+      placingSetupId = null;
+      setupPlacementError = null;
+      log('Spectral Guardian placement set.', 'wave');
+      renderAll();
       return;
     }
     if (placingSetupId === 'beartrap') {
@@ -6699,10 +7213,18 @@
     // so it stays threatening at any depth. Stacks reset at the start of every fight (see
     // startFight).
     if (hero.poisonStacks > 0 && queue.length) {
-      const poisonDmg = hero.plaguedDmgRef * AFFIXES.plagued.poisonPerStackPct * hero.poisonStacks * simDt;
+      const poisonDmg = hero.plaguedDmgRef * AFFIXES.plagued.poisonPerStackPct * hero.poisonStacks * simDt
+        * (isEquipped('resistmagicalafflictions') ? 0.5 : 1);
       hero.hp -= poisonDmg;
       logDamageTaken('Poison', poisonDmg);
       checkHeroDeath();
+    }
+
+    // Second Wind's post-save surge — decays independently, same queue.length gate as everything
+    // else here; computeStats reads it live while it's still above 0.
+    if (hero.secondWindSurgeTimer > 0 && queue.length) {
+      hero.secondWindSurgeTimer -= simDt;
+      if (hero.secondWindSurgeTimer < 0) hero.secondWindSurgeTimer = 0;
     }
 
     // Vengeful Spirit — stacks decay independently, same queue.length gate as everything above.
@@ -6729,9 +7251,12 @@
     // Same "only accumulate attack progress while actually in range" rule enemies use — the
     // hero doesn't get a burst of pent-up attacks the instant it closes the distance either.
     const heroTarget = currentHeroTarget();
-    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= effectiveAtkRange(heroHex, s.atkRange, isEquipped('truesight'), heroTarget.hex) && hasLineOfSight(heroHex, heroTarget.hex, isEquipped('truesight'))) {
+    if (heroTarget && hexDistance(heroHex, heroTarget.hex) <= effectiveAtkRange(heroHex, s.atkRange, isEquipped('truesight'), heroTarget.hex) && hasLineOfSight(heroHex, heroTarget.hex, isEquipped('truesight'), frostLanceBypass())) {
       hero.atkTimer += simDt * terrainAt(heroHex).atkSpeedMult; // e.g. Debris slows the hero's own attacks too
-      const heroInterval = 1 / s.atkSpeed;
+      // Dual Crossbows fires a bolt every HALF of the normal interval — two bows, evenly
+      // staggered — so it scales with attack speed automatically exactly like every other
+      // weapon's own rate already does.
+      const heroInterval = HERO_WEAPONS[hero.equippedWeapon].dualBow ? (1 / s.atkSpeed) / 2 : 1 / s.atkSpeed;
       while (hero.atkTimer >= heroInterval && phase === 'combat' && queue.length) {
         hero.atkTimer -= heroInterval;
         heroAttack();
@@ -6774,31 +7299,29 @@
       }
     });
 
-    // Every living enemy independently picks whichever candidate — the hero/decoy, or any
-    // living ally — is closest AND actually in-range+LOS to IT, defaulting to the hero/decoy on
-    // a tie. Movement (resolveEnemyMovement, above) still only ever paths every enemy toward
-    // aggroHex() — completely unchanged; this only decides who gets attacked once an enemy's
-    // already in position, so an enemy never diverts its approach to chase an ally standing off
-    // to the side — it only "notices" one once it's already closer than the hero/decoy from
-    // wherever the enemy's own approach put it. Snapshot the roster first since an attack (e.g.
-    // a Thorns/Static Ward kill) can remove entries mid-loop.
-    const enemyTarget = aggroHex();
+    // Every living enemy uses the SAME nearest-target pick attack-side that resolveEnemyMovement
+    // already used to decide where it walked this tick (see pickEnemyAggroTarget) — movement and
+    // attacks can never disagree about who an enemy is going after anymore. Snapshot the roster
+    // first since an attack (e.g. a Thorns/Static Ward kill) can remove entries mid-loop.
     queue.slice().forEach(enemy => {
       if (phase !== 'combat' || !queue.includes(enemy)) return;
       // Whip's slow / Shatterpoint's chill wave — decay independently of stun/attack eligibility
       // below, so they keep ticking down even on a tick where the enemy doesn't get to act at all.
       if (enemy.slowTimer > 0) enemy.slowTimer = Math.max(0, enemy.slowTimer - simDt);
       if (enemy.shatterSlowTimer > 0) enemy.shatterSlowTimer = Math.max(0, enemy.shatterSlowTimer - simDt);
+      if (enemy.frostLanceSlowTimer > 0) enemy.frostLanceSlowTimer = Math.max(0, enemy.frostLanceSlowTimer - simDt);
       // Frostbite's Chill decay — the whole stack resets once the timer (refreshed on every hit
       // that adds a stack — see heroAttack) runs out.
       if (enemy.chillStacks > 0) {
         enemy.chillDecayTimer = (enemy.chillDecayTimer || 0) - simDt;
         if (enemy.chillDecayTimer <= 0) enemy.chillStacks = 0;
       }
-      // Creeping Dread — stacks build every 2s while within 2 hexes of the hero, and clear
-      // instantly (not a gradual decay) the moment the enemy leaves that radius.
+      // Creeping Dread — stacks build every 2s while within 3 hexes of the HERO specifically
+      // (proximity-to-hero, a separate concept from aggro targeting — unaffected by who the
+      // enemy is currently aggroed on), and clear instantly (not a gradual decay) the moment the
+      // enemy leaves that radius.
       if (isEquipped('creepingdread')) {
-        if (hexDistance(enemy.hex, heroHex) <= 2) {
+        if (hexDistance(enemy.hex, heroHex) <= 3) {
           enemy.cdTimer = (enemy.cdTimer || 0) + simDt;
           while (enemy.cdTimer >= 2 && (enemy.cdStacks || 0) < 3) { enemy.cdTimer -= 2; enemy.cdStacks = (enemy.cdStacks || 0) + 1; }
         } else if (enemy.cdStacks) {
@@ -6808,21 +7331,18 @@
       if (enemy.stunTimer > 0) { enemy.stunTimer = Math.max(0, enemy.stunTimer - simDt); return; }
       if (terrainAt(enemy.hex).blocksAttack) return; // e.g. smoked — can't attack until they step out
 
+      const t = pickEnemyAggroTarget(enemy);
       const baseRange = enemyBaseRange(enemy);
-      const candidates = [{ kind: 'hero', hex: enemyTarget }].concat(allies.map(a => ({ kind: 'ally', ref: a, hex: a.hex })));
-      let best = null, bestDist = Infinity;
-      candidates.forEach(c => {
-        const dist = hexDistance(enemy.hex, c.hex);
-        const inRange = dist <= effectiveAtkRange(enemy.hex, baseRange, false, c.hex) && hasLineOfSight(enemy.hex, c.hex);
-        if (inRange && dist < bestDist) { bestDist = dist; best = c; }
-      });
-      if (!best) return; // nothing in range/LOS at all this tick — same early-return as before, just reframed
+      const inRange = hexDistance(enemy.hex, t.hex) <= effectiveAtkRange(enemy.hex, baseRange, false, t.hex) && hasLineOfSight(enemy.hex, t.hex);
+      if (!inRange) return; // not yet close enough to its own nearest target — still closing in, doesn't opportunistically hit something else instead
 
-      enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult * hasteMultFor(enemy); // e.g. Debris slows attacks too, not just movement
+      enemy.atkTimer += simDt * terrainAt(enemy.hex).atkSpeedMult * hasteMultFor(enemy)
+        * (1 - Math.min(1, 0.10 * debuffAmpMult() * (enemy.cdStacks || 0)))
+        * (enemy.frostLanceSlowTimer > 0 ? enemy.frostLanceSlowMult : 1); // e.g. Debris slows attacks too, not just movement; Creeping Dread and Frost Lance slow attack speed too, not just movement
       while (enemy.atkTimer >= enemy.atkInterval && phase === 'combat' && queue.includes(enemy)
-          && (best.kind === 'hero' || (allies.includes(best.ref) && best.ref.hp > 0))) { // stop mid-tick if this enemy's own earlier hit this tick just killed the ally it was aiming at
+          && (t.kind === 'hero' || (allies.includes(t.ref) && t.ref.hp > 0))) { // stop mid-tick if this enemy's own earlier hit this tick just killed the ally it was aiming at
         enemy.atkTimer -= enemy.atkInterval;
-        enemyAttack(enemy, best);
+        enemyAttack(enemy, t);
       }
     });
     renderHeroPanel();
@@ -6849,6 +7369,7 @@
     effects.forEach(e => {
       const rate = e.type === 'cleaveSlice' ? 1.4 : e.type === 'cleaveGlow' ? 1.6 : e.type === 'slash' ? 3.5 : e.type === 'bolt' ? 2.8
         : e.type === 'shock' ? 4 : e.type === 'mageZap' ? 3 : e.type === 'smoke' ? 1.3 : e.type === 'shockwave' ? 1.2
+        : e.type === 'blinkStreak' ? 2.5 : e.type === 'revival' ? 1.3
         : e.type === 'fireballBolt' ? 2.8 : e.type === 'fireballBurst' ? 1.0 : e.type === 'hurricane' ? 1.2
         : e.type === 'magicMissileBolt' ? 2.8 : e.type === 'wandOrb' ? 2.8
         : e.type === 'boomerangThrow' ? BOOMERANG_THROW_RATE // slower — see its own comment; shared with heroAttack's bounce-damage scheduling
@@ -6931,6 +7452,14 @@
       // maybeRetargetHero (e.g. flipping to Random should re-roll right away, not just on the
       // current target's death).
       if (phase === 'combat') { heroTargetId = null; pickHeroTarget(); }
+    });
+  });
+  document.querySelectorAll('.weaponTargetBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      hero.weaponTargetMode = btn.dataset.weaponTargetMode;
+      document.querySelectorAll('.weaponTargetBtn').forEach(b => b.classList.toggle('active', b === btn));
+      // No forced re-pick needed here (unlike Targeting mode above) — this only affects which
+      // target the secondary bolt uses on the NEXT swing, not the sticky primary target.
     });
   });
   document.querySelectorAll('.stanceBtn').forEach(btn => {
